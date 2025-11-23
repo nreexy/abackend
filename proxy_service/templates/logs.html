@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .terminal-window {
+        background-color: #1e1e1e;
+        color: #d4d4d4;
+        font-family: 'Courier New', Courier, monospace;
+        border-radius: 6px;
+        padding: 15px;
+        height: 75vh;
+        overflow-y: auto;
+        font-size: 0.9rem;
+        white-space: pre-wrap;
+        /* Wrap long lines */
+        border: 1px solid #333;
+    }
+
+    /* Custom scrollbar for terminal */
+    .terminal-window::-webkit-scrollbar {
+        width: 10px;
+    }
+
+    .terminal-window::-webkit-scrollbar-track {
+        background: #1e1e1e;
+    }
+
+    .terminal-window::-webkit-scrollbar-thumb {
+        background: #444;
+        border-radius: 5px;
+    }
+
+    .terminal-window::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
+
+    /* Syntax Highlighting Helpers */
+    .log-line {
+        display: block;
+        min-height: 1.2em;
+        border-bottom: 1px solid #2a2a2a;
+    }
+
+    .log-info {
+        color: #4ec9b0;
+    }
+
+    /* Cyan */
+    .log-warn {
+        color: #ce9178;
+    }
+
+    /* Orange/Red */
+    .log-err {
+        color: #f44747;
+        font-weight: bold;
+    }
+
+    /* Red */
+    .log-debug {
+        color: #569cd6;
+    }
+
+    /* Blue */
+</style>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>System Logs</h2>
+        <div>
+            <a href="/logs" class="btn btn-sm btn-primary">
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+            </a>
+            <button class="btn btn-sm btn-outline-secondary ms-2" onclick="scrollToBottom()">
+                <i class="bi bi-arrow-down"></i> Bottom
+            </button>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+            <div class="terminal-window" id="consoleOutput">
+                {% for line in logs %}{% if 'ERROR' in line or '❌' in line or 'Exception' in line %}<span
+                    class="log-line log-err">{{ line }}</span>{% elif 'WARNING' in line or '⚠️' in line %}<span
+                    class="log-line log-warn">{{ line }}</span>{% elif 'INFO' in line %}<span
+                    class="log-line log-info">{{ line }}</span>{% elif '🚀' in line %}<span
+                    class="log-line log-debug">{{ line }}</span>{% else %}<span class="log-line">{{ line }}</span>{%
+                endif %}{% endfor %}
+            </div>
+        </div>
+        <div class="card-footer bg-white text-muted small">
+            Displaying last {{ logs|length }} lines (Newest first).
+        </div>
+    </div>
+</div>
+
+<script>
+    // Optional: Auto-scroll logic if viewing non-reversed logs
+    function scrollToBottom() {
+        var terminal = document.getElementById('consoleOutput');
+        terminal.scrollTop = terminal.scrollHeight;
+    }
+</script>
+{% endblock %}

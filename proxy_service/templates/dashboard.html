@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Dashboard</h2>
+        <span class="badge bg-secondary">Server: Online</span>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card text-center p-3 shadow-sm border-0">
+                <h2 class="display-6">{{ stats.total }}</h2>
+                <small class="text-muted">Total Requests</small>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center p-3 shadow-sm border-0">
+                <h2 class="display-6 text-success"><i class="bi bi-check-circle"></i></h2>
+                <small class="text-muted">Audible Status</small>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center p-3 shadow-sm border-0">
+                <h2 class="display-6 text-primary">US</h2>
+                <small class="text-muted">Region</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Top Books -->
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0">📚 Most Popular Books</h5>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-4">Count</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for book in stats.top_books %}
+                            <tr>
+                                <td class="ps-4 fw-bold">{{ book.count }}</td>
+                                <td>
+                                    <div class="fw-bold text-truncate" style="max-width: 250px;">{{ book.title or
+                                        'Unknown' }}</div>
+                                    <small class="text-muted">{{ book._id }}</small>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="2" class="p-4 text-center">No data yet.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Logs -->
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0">📝 Recent Activity</h5>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-striped mb-0" style="font-size: 0.9rem;">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-3">Time</th>
+                                <th>Action</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in stats.recent_logs %}
+                            <tr>
+                                <td class="ps-3">{{ log.timestamp.strftime('%H:%M:%S') }}</td>
+                                <td>
+                                    {% if log.action == 'search' %}
+                                    <span class="badge bg-primary">Search</span>
+                                    {% else %}
+                                    <span class="badge bg-success">Fetch</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-truncate" style="max-width: 200px;">
+                                    {{ log.details or log.target }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

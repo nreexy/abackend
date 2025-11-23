@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .method-badge {
+        width: 80px;
+        text-align: center;
+        display: inline-block;
+    }
+
+    pre {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 5px;
+        border: 1px solid #e9ecef;
+    }
+
+    .param-table th {
+        width: 20%;
+    }
+</style>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>API Documentation</h2>
+        <a href="/docs" target="_blank" class="btn btn-outline-primary">
+            <i class="bi bi-box-arrow-up-right"></i> Open Swagger UI
+        </a>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-9">
+
+            <!-- AUTHENTICATION -->
+            <div class="card shadow-sm border-0 mb-4" id="auth">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0">🔐 Authentication</h5>
+                </div>
+                <div class="card-body">
+                    <p>The API is protected. You must authenticate using one of two methods:</p>
+                    <ul>
+                        <li><strong>Browser:</strong> Log in via the <a href="/login">Login Page</a> (Session Cookie).
+                        </li>
+                        <li><strong>Programmatic (cURL/App):</strong> Send a Bearer Token in the header.</li>
+                    </ul>
+                    <h6>Example Header:</h6>
+                    <pre>Authorization: Bearer YOUR_ACCESS_TOKEN</pre>
+                </div>
+            </div>
+
+            <!-- SEARCH -->
+            <div class="card shadow-sm border-0 mb-4" id="search">
+                <div class="card-header bg-white py-3">
+                    <span class="badge bg-primary method-badge me-2">GET</span>
+                    <strong class="font-monospace fs-5">/search</strong>
+                </div>
+                <div class="card-body">
+                    <p>Search for audiobooks across all configured providers (Audible, iTunes, Goodreads, PRH). Results
+                        are cached automatically.</p>
+
+                    <h6>Parameters</h6>
+                    <table class="table table-bordered table-sm param-table">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Name</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>q</code></td>
+                                <td>String</td>
+                                <td>General keyword search (Title).</td>
+                            </tr>
+                            <tr>
+                                <td><code>author</code></td>
+                                <td>String</td>
+                                <td>Filter by Author name.</td>
+                            </tr>
+                            <tr>
+                                <td><code>isbn</code></td>
+                                <td>String</td>
+                                <td>Search by specific ISBN-13.</td>
+                            </tr>
+                            <tr>
+                                <td><code>min_rating</code></td>
+                                <td>Float</td>
+                                <td>Exclude results below this rating (0.0 - 5.0).</td>
+                            </tr>
+                            <tr>
+                                <td><code>providers</code></td>
+                                <td>String</td>
+                                <td>Comma-separated list to override default settings (e.g.,
+                                    <code>Audible,iTunes</code>).</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h6>Example Request</h6>
+                    <pre>GET /search?q=The+Martian&author=Andy+Weir&min_rating=4.5</pre>
+                </div>
+            </div>
+
+            <!-- GET DETAILS -->
+            <div class="card shadow-sm border-0 mb-4" id="details">
+                <div class="card-header bg-white py-3">
+                    <span class="badge bg-primary method-badge me-2">GET</span>
+                    <strong class="font-monospace fs-5">/book/{asin}</strong>
+                </div>
+                <div class="card-body">
+                    <p>Retrieve detailed metadata for a specific book. If the book is not in the cache, it attempts to
+                        fetch it from Audible, then iTunes, then PRH.</p>
+
+                    <h6>Path Parameters</h6>
+                    <table class="table table-bordered table-sm param-table">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Name</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>asin</code></td>
+                                <td>String</td>
+                                <td>The unique ID (ASIN, ISBN, or Goodreads ID).</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h6>Response Format</h6>
+                    <pre>{
+  "asin": "B082BGDBHB",
+  "title": "The Martian",
+  "authors": ["Andy Weir"],
+  "narrators": ["Wil Wheaton"],
+  "description": "...",
+  "rating": 4.8,
+  "rating_count": 12045,
+  "runtime_minutes": 659,
+  "cover_image": "https://...",
+  "chapters": [...],
+  "provider": "Audible"
+}</pre>
+                </div>
+            </div>
+
+            <!-- IMPORT LIST -->
+            <div class="card shadow-sm border-0 mb-4" id="import">
+                <div class="card-header bg-white py-3">
+                    <span class="badge bg-success method-badge me-2">POST</span>
+                    <strong class="font-monospace fs-5">/lists/import</strong>
+                </div>
+                <div class="card-body">
+                    <p>Scrapes a public URL (Audible Series, Charts, or Goodreads List), fetches metadata for every book
+                        found, and saves it as a collection.</p>
+
+                    <h6>Request Body (JSON)</h6>
+                    <pre>{
+  "url": "https://www.goodreads.com/list/show/1234.Best_SciFi"
+}</pre>
+                </div>
+            </div>
+
+            <!-- CREATE LIST -->
+            <div class="card shadow-sm border-0 mb-4" id="create">
+                <div class="card-header bg-white py-3">
+                    <span class="badge bg-success method-badge me-2">POST</span>
+                    <strong class="font-monospace fs-5">/lists/create</strong>
+                </div>
+                <div class="card-body">
+                    <p>Create a manual list by providing a list of ASINs. The server will automatically fetch metadata
+                        for any ASINs not currently in the library.</p>
+
+                    <h6>Request Body (JSON)</h6>
+                    <pre>{
+  "name": "My Favorites",
+  "asins": ["B082BGDBHB", "B00B5HZGUG"]
+}</pre>
+                </div>
+            </div>
+
+            <!-- CUSTOM FIELDS -->
+            <div class="card shadow-sm border-0 mb-4" id="custom">
+                <div class="card-header bg-white py-3">
+                    <span class="badge bg-success method-badge me-2">POST</span>
+                    <strong class="font-monospace fs-5">/custom-fields</strong>
+                </div>
+                <div class="card-body">
+                    <p>Attach custom JSON data to a book. This data is merged into the response whenever the book is
+                        requested.</p>
+
+                    <h6>Request Body (JSON)</h6>
+                    <pre>{
+  "asin": "B082BGDBHB",
+  "fields": {
+    "my_rating": 5,
+    "tags": ["scifi", "favorite"],
+    "notes": "Great listening experience."
+  }
+}</pre>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="col-lg-3 d-none d-lg-block">
+            <div class="sticky-top" style="top: 20px; z-index: 1;">
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-light fw-bold">Jump To</div>
+                    <div class="list-group list-group-flush">
+                        <a href="#auth" class="list-group-item list-group-item-action">Authentication</a>
+                        <a href="#search" class="list-group-item list-group-item-action">Search</a>
+                        <a href="#details" class="list-group-item list-group-item-action">Get Book Details</a>
+                        <a href="#import" class="list-group-item list-group-item-action">Import List</a>
+                        <a href="#create" class="list-group-item list-group-item-action">Create List</a>
+                        <a href="#custom" class="list-group-item list-group-item-action">Custom Fields</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

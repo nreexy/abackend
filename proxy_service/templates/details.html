@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <h2 class="mb-4">API Performance & Statistics</h2>
+
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        {% for provider in stats.aggregated %}
+        <div class="col-md-3 mb-3">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <h5 class="card-title text-muted mb-3">{{ provider._id }}</h5>
+
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Total Calls:</span>
+                        <span class="fw-bold">{{ provider.total_calls }}</span>
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Avg Latency:</span>
+                        <!-- Color code latency: Green < 500ms, Yellow < 2s, Red > 2s -->
+                        {% if provider.avg_latency < 500 %} <span class="badge bg-success">{{
+                            "%.0f"|format(provider.avg_latency) }} ms</span>
+                            {% elif provider.avg_latency < 2000 %} <span class="badge bg-warning text-dark">{{
+                                "%.0f"|format(provider.avg_latency) }} ms</span>
+                                {% else %}
+                                <span class="badge bg-danger">{{ "%.0f"|format(provider.avg_latency) }} ms</span>
+                                {% endif %}
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <span>Results/Call:</span>
+                        <span class="fw-bold">
+                            {{ "%.1f"|format(provider.total_results / provider.total_calls) }}
+                        </span>
+                    </div>
+                </div>
+                <div class="card-footer bg-transparent border-0">
+                    <small class="text-muted">Total Results: {{ provider.total_results }}</small>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Recent Calls Table -->
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-white py-3">
+            <h5 class="mb-0">Recent API Call Log</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Time (UTC)</th>
+                            <th>Provider</th>
+                            <th>Duration</th>
+                            <th>Results</th>
+                            <th>Status</th>
+                            <th>Request ID</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in stats.recent %}
+                        <tr>
+                            <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            <td>
+                                {% if log.provider == 'Audible' %}
+                                <span class="badge bg-warning text-dark">Audible</span>
+                                {% elif log.provider == 'iTunes' %}
+                                <span class="badge bg-info text-white">iTunes</span>
+                                {% elif log.provider == 'Goodreads' %}
+                                <span class="badge bg-success">Goodreads</span>
+                                {% elif log.provider == 'PRH' %}
+                                <span class="badge" style="background-color: #FF6600; color: white;">PRH</span>
+                                {% else %}
+                                {{ log.provider }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <span style="width: 60px;">{{ "%.0f"|format(log.duration_ms) }}ms</span>
+                                    <!-- Visual Bar for Latency (Max assumed 3000ms for scale) -->
+                                    <div class="progress flex-grow-1" style="height: 6px;">
+                                        <div class="progress-bar {% if log.duration_ms > 2000 %}bg-danger{% elif log.duration_ms > 800 %}bg-warning{% else %}bg-success{% endif %}"
+                                            role="progressbar"
+                                            style="width: {{ (log.duration_ms / 3000 * 100)|round }}%;"
+                                            aria-valuenow="{{ log.duration_ms }}" aria-valuemin="0"
+                                            aria-valuemax="3000"></div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>{{ log.result_count }}</td>
+                            <td>
+                                {% if log.status == 'success' %}
+                                <i class="bi bi-check-circle-fill text-success"></i>
+                                {% else %}
+                                <i class="bi bi-x-circle-fill text-danger"></i>
+                                {% endif %}
+                            </td>
+                            <td class="text-muted small font-monospace">{{ log.request_id[:8] }}...</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center p-4 text-muted">No calls logged yet. Perform a search!
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

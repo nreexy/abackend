@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <h2 class="mb-4">Search Audiobooks</h2>
+
+    <!-- SEARCH FORM -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body">
+            <form id="searchForm">
+                <div class="row g-3">
+
+                    <!-- Main Text Inputs -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Title / Keywords</label>
+                        <input type="text" class="form-control" id="q" placeholder="e.g. Project Hail Mary">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Author</label>
+                        <input type="text" class="form-control" id="author" placeholder="e.g. Andy Weir">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">ISBN</label>
+                        <input type="text" class="form-control" id="isbn" placeholder="e.g. 9780593135204">
+                    </div>
+
+                    <!-- Filters Line 2 -->
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">Min Rating</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-star-fill text-warning"></i></span>
+                            <input type="number" class="form-control" id="min_rating" step="0.1" min="0" max="5"
+                                placeholder="4.5">
+                        </div>
+                    </div>
+
+                    <!-- Provider Checkboxes -->
+                    <div class="col-md-7 d-flex align-items-end">
+                        <div class="border rounded p-2 w-100 d-flex justify-content-around bg-light">
+                            <div class="form-check">
+                                <input class="form-check-input provider-chk" type="checkbox" value="Audible"
+                                    id="prov_audible" {% if config.providers.audible %}checked{% endif %}>
+                                <label class="form-check-label" for="prov_audible">Audible</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input provider-chk" type="checkbox" value="iTunes"
+                                    id="prov_itunes" {% if config.providers.itunes %}checked{% endif %}>
+                                <label class="form-check-label" for="prov_itunes">iTunes</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input provider-chk" type="checkbox" value="Goodreads"
+                                    id="prov_goodreads" {% if config.providers.goodreads %}checked{% endif %}>
+                                <label class="form-check-label" for="prov_goodreads">Goodreads</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input provider-chk" type="checkbox" value="PRH" id="prov_prh"
+                                    {% if config.providers.prh %}checked{% endif %}>
+                                <label class="form-check-label" for="prov_prh">PRH</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Submit -->
+                    <div class="col-md-2 d-grid">
+                        <button type="submit" class="btn btn-primary mt-auto">
+                            <i class="bi bi-search"></i> Search
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- STATUS / LOADER -->
+    <div id="statusArea" class="text-center my-5 d-none">
+        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
+        <p class="mt-2 text-muted">Searching external providers... this may take a few seconds.</p>
+    </div>
+
+    <!-- RESULTS GRID -->
+    <div id="resultsArea" class="row g-4"></div>
+</div>
+
+<script>
+    document.getElementById('searchForm').addEventListener('submit', async function (e) {
+        e.preventDefault();
+
+        const q = document.getElementById('q').value.trim();
+        const author = document.getElementById('author').value.trim();
+        const isbn = document.getElementById('isbn').value.trim();
+        const minRating = document.getElementById('min_rating').value;
+
+        // Collect Providers
+        const providers = Array.from(document.querySelectorAll('.provider-chk:checked'))
+            .map(cb => cb.value).join(',');
+
+        if (!q && !author && !isbn) {
+            alert("Please enter at least a Title, Author, or ISBN.");
+            return;
+        }
+
+        // UI States
+        const resultsArea = document.getElementById('resultsArea');
+        const statusArea = document.getElementById('statusArea');
+        resultsArea.innerHTML = '';
+        statusArea.classList.remove('d-none');
+
+        // Build URL
+        const params = new URLSearchParams();
+        if (q) params.append('q', q);
+        if (author) params.append('author', author);
+        if (isbn) params.append('isbn', isbn);
+        if (minRating) params.append('min_rating', minRating);
+        if (providers) params.append('providers', providers);
+
+        try {
+            const response = await fetch(`/search?${params.toString()}`);
+            const data = await response.json();
+
+            statusArea.classList.add('d-none');
+
+            if (response.ok) {
+                if (data.length === 0) {
+                    resultsArea.innerHTML = `
+                    <div class="col-12 text-center p-5">
+                        <i class="bi bi-journal-x fs-1 text-muted mb-3"></i>
+                        <h4>No results found</h4>
+                        <p class="text-muted">Try adjusting your filters or search terms.</p>
+                    </div>`;
+                } else {
+                    renderResults(data);
+                }
+            } else {
+                resultsArea.innerHTML = `<div class="alert alert-danger">Error: ${data.detail || 'Search failed'}</div>`;
+            }
+        } catch (err) {
+            statusArea.classList.add('d-none');
+            resultsArea.innerHTML = `<div class="alert alert-danger">Network Error: ${err.message}</div>`;
+        }
+    });
+
+    function renderResults(books) {
+        const container = document.getElementById('resultsArea');
+
+        books.forEach(book => {
+            // Format Data
+            const cover = book.cover_image || 'https://via.placeholder.com/300x300?text=No+Cover';
+            const rating = book.rating ? `★ ${book.rating.toFixed(2)}` : 'No Rating';
+            const ratingClass = book.rating ? 'text-warning' : 'text-muted';
+            const authors = book.authors ? book.authors.join(', ') : 'Unknown';
+            const runtime = book.runtime_minutes ? (book.runtime_minutes / 60).toFixed(1) + ' hrs' : '-';
+
+            let providerBadge = 'bg-secondary';
+            if (book.provider === 'Audible') providerBadge = 'bg-warning text-dark';
+            if (book.provider === 'iTunes') providerBadge = 'bg-info text-white';
+            if (book.provider === 'Goodreads') providerBadge = 'bg-success';
+            if (book.provider === 'Penguin Random House') providerBadge = 'bg-danger';
+
+            const html = `
+        <div class="col-md-6 col-lg-4 col-xl-3">
+            <div class="card h-100 shadow-sm border-0">
+                <div class="position-relative">
+                    <img src="${cover}" class="card-img-top" alt="Cover" style="height: 250px; object-fit: contain; background: #f8f9fa; padding: 10px;">
+                    <span class="position-absolute top-0 end-0 badge ${providerBadge} m-2 shadow-sm">${book.provider}</span>
+                </div>
+                <div class="card-body d-flex flex-column">
+                    <h6 class="card-title fw-bold text-truncate" title="${book.title}">${book.title}</h6>
+                    <p class="card-text small text-muted mb-1 text-truncate">${authors}</p>
+                    
+                    <div class="d-flex justify-content-between align-items-center mt-2 mb-2 small">
+                        <span class="${ratingClass} fw-bold">${rating}</span>
+                        <span class="text-muted"><i class="bi bi-clock"></i> ${runtime}</span>
+                    </div>
+                    
+                    <div class="mt-auto pt-3 d-flex justify-content-between">
+                        <a href="/book/${book.asin}" target="_blank" class="btn btn-sm btn-outline-primary w-100">
+                            <i class="bi bi-eye"></i> View JSON
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        `;
+            container.innerHTML += html;
+        });
+    }
+</script>
+{% endblock %}

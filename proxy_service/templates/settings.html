@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <h2 class="mb-4">System Settings</h2>
+
+    {% if request.query_params.get('saved') %}
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        Settings saved successfully!
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endif %}
+    {% if request.query_params.get('flushed') %}
+    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+        <strong>Cache Flushed!</strong> All metadata has been cleared from Redis.
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endif %}
+
+    <div class="row">
+        <!-- Configuration Card -->
+        <div class="col-md-8">
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0"><i class="bi bi-sliders"></i> Search Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <form action="/settings/update" method="post">
+
+                        <!-- Search Limit -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label for="limit" class="form-label fw-bold">Search Results (per Provider)</label>
+                                <input type="number" class="form-control" id="limit" name="limit"
+                                    value="{{ config.search_limit }}" min="1" max="20">
+                                <div class="form-text">Max results per API during search.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="scrape_limit" class="form-label fw-bold">List Import Limit (Pages)</label>
+                                <input type="number" class="form-control" id="scrape_limit" name="scrape_limit"
+                                    value="{{ config.scrape_limit_pages or 100 }}" min="1" max="500">
+                                <div class="form-text">Max Goodreads pages to scrape (1 page = 100 books).</div>
+                            </div>
+                        </div>
+
+                        <hr>
+
+                        <!-- Provider Toggles (Keep existing code below...) -->
+                        <label class="form-label fw-bold mb-3">Active Providers</label>
+
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="prov_audible" name="prov_audible"
+                                value="true" {% if config.providers.audible %}checked{% endif %}>
+                            <label class="form-check-label" for="prov_audible">
+                                <span class="badge bg-warning text-dark border">Audible</span>
+                                <span class="text-muted ms-2">(Rich metadata, Chapters, Ratings)</span>
+                            </label>
+                        </div>
+
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="prov_itunes" name="prov_itunes"
+                                value="true" {% if config.providers.itunes %}checked{% endif %}>
+                            <label class="form-check-label" for="prov_itunes">
+                                <span class="badge bg-info text-white border">iTunes</span>
+                                <span class="text-muted ms-2">(High-res covers, Release dates)</span>
+                            </label>
+                        </div>
+
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="prov_goodreads" name="prov_goodreads"
+                                value="true" {% if config.providers.goodreads %}checked{% endif %}>
+                            <label class="form-check-label" for="prov_goodreads">
+                                <span class="badge bg-success border">Goodreads</span>
+                                <span class="text-muted ms-2">(Descriptions, Community Ratings)</span>
+                            </label>
+                        </div>
+
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="prov_prh" name="prov_prh" value="true"
+                                {% if config.providers.prh %}checked{% endif %}>
+                            <label class="form-check-label" for="prov_prh">
+                                <span class="badge" style="background-color: #FF6600; color: white;">Penguin Random
+                                    House</span>
+                                <span class="text-muted ms-2">(Official Publisher Metadata)</span>
+                            </label>
+                        </div>
+
+                        <div class="mt-4">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-save"></i> Save Changes
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Danger Zone Card -->
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 border-danger">
+                <div class="card-header bg-danger text-white py-3">
+                    <h5 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Danger Zone</h5>
+                </div>
+                <div class="card-body">
+                    <p>Clear all cached search results and library data. This action cannot be undone.</p>
+                    <form action="/settings/flush" method="post"
+                        onsubmit="return confirm('Are you sure you want to wipe ALL metadata?');">
+                        <button type="submit" class="btn btn-outline-danger w-100">
+                            <i class="bi bi-trash"></i> Flush Redis Cache
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

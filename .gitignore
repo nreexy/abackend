@@ -1,0 +1,10 @@
+.env
+proxy_service/audible_auth.json
+mongo_data/
+redis_data/
+system.log
+__pycache__/
+*.pyc
+.venv/
+venv/
+.DS_Store

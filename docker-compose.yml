@@ -1,0 +1,79 @@
+version: "3.8"
+
+services:
+  # --- Your Custom Proxy ---
+  metadata-proxy:
+    build: ./proxy_service
+    container_name: metadata_proxy
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis_cache:6379
+      - MONGO_URL=mongodb://mongo_db:27017
+      - AUDNEXUS_URL=http://audnexus:3000
+      - AUDIBLE_COUNTRY_CODE=us
+    depends_on:
+      - redis_cache
+      - mongo_db
+      - audnexus
+    networks:
+      - metadata_net
+
+  # --- Audnexus Core ---
+  audnexus:
+    image: ghcr.io/laxamentumtech/audnexus:latest
+    container_name: audnexus
+    # We use 'always' to ensure it tries to come back up after a crash
+    restart: always
+    environment:
+      # --- DATABASE CONNECTIONS (Set Multiple Aliases to guarantee detection) ---
+      - NODE_MONGODB_URI=mongodb://mongo_db:27017/audnexus
+      - MONGODB_URI=mongodb://mongo_db:27017/audnexus
+      - MONGO_URL=mongodb://mongo_db:27017/audnexus
+      
+      - NODE_REDIS_URL=redis://redis_cache:6379
+      - REDIS_URL=redis://redis_cache:6379
+
+      # --- CHAPTER DATA TOKENS ---
+      # These are required for chapter lookup. If you don't have them yet, 
+      # you can leave them blank, but chapter endpoints will fail.
+      #- NODE_ADP_TOKEN=${ADP_TOKEN:-}
+      #- ADP_TOKEN=${ADP_TOKEN:-}
+      #- NODE_PRIVATE_KEY=${PRIVATE_KEY:-}
+      #- PRIVATE_KEY=${PRIVATE_KEY:-}
+    depends_on:
+      - redis_cache
+      - mongo_db
+    networks:
+      - metadata_net
+
+  # --- Infrastructure ---
+  redis_cache:
+    image: redis:alpine
+    container_name: redis_cache
+    restart: always
+    # Command: Tells Redis to write every change to disk
+    command: redis-server --appendonly yes
+    networks:
+      - metadata_net
+    volumes:
+      # Volume: Stores the data on your host machine so it survives container deletion
+      - redis_data:/data
+
+  mongo_db:
+    image: mongo:latest
+    container_name: mongo_db
+    restart: always
+    volumes:
+      # This maps the database files to your host machine
+      - ./mongo_data:/data/db 
+    networks:
+      - metadata_net
+
+networks:
+  metadata_net:
+    driver: bridge
+
+volumes:
+  mongo_data:
+  redis_data:

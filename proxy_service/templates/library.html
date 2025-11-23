@@ -1,0 +1,295 @@
+{% extends "base.html" %}
+
+<!-- MACRO -->
+{%- macro compact_number(n) -%}
+{%- if n is none -%}0
+{%- elif n >= 1000000 -%}{{ "%.1f"|format(n/1000000) }}m
+{%- elif n >= 1000 -%}{{ "%.1f"|format(n/1000) }}k
+{%- else -%}{{ n }}
+{%- endif -%}
+{%- endmacro -%}
+
+{% block content %}
+<style>
+    /* Custom scrollbar */
+    .table-responsive::-webkit-scrollbar {
+        height: 12px;
+    }
+
+    .table-responsive::-webkit-scrollbar-track {
+        background: #f1f1f1;
+    }
+
+    .table-responsive::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 6px;
+    }
+
+    .table-responsive::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
+
+    .wide-table td,
+    .wide-table th {
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+
+    .col-desc {
+        max-width: 300px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    th.sortable {
+        cursor: pointer;
+        user-select: none;
+    }
+
+    th.sortable:hover {
+        background-color: #e9ecef;
+    }
+</style>
+
+<div class="container-fluid">
+
+    <!-- HEADER -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>Library</h2>
+        <div>
+            <span class="badge bg-primary">{{ total_count }} Books</span>
+            <span class="text-muted ms-2 small">Page {{ current_page }} of {{ total_pages }}</span>
+        </div>
+    </div>
+
+    <!-- FILTER BAR -->
+    <div class="card shadow-sm border-0 mb-4 bg-light">
+        <div class="card-body py-3">
+            <form action="/library" method="get" class="row g-2 align-items-center">
+                <!-- Hidden Page Reset -->
+                <input type="hidden" name="page" value="1">
+
+                <!-- Provider -->
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold text-muted mb-0">Provider</label>
+                    <select name="provider" class="form-select form-select-sm">
+                        <option value="">All Providers</option>
+                        <option value="Audible" {% if filters.provider=='Audible' %}selected{% endif %}>Audible</option>
+                        <option value="iTunes" {% if filters.provider=='iTunes' %}selected{% endif %}>iTunes</option>
+                        <option value="Goodreads" {% if filters.provider=='Goodreads' %}selected{% endif %}>Goodreads
+                        </option>
+                        <option value="Penguin Random House" {% if filters.provider=='Penguin Random House' %}selected{%
+                            endif %}>Penguin</option>
+                    </select>
+                </div>
+
+                <!-- Language -->
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold text-muted mb-0">Language</label>
+                    <select name="language" class="form-select form-select-sm">
+                        <option value="">All</option>
+                        <option value="en" {% if filters.language=='en' %}selected{% endif %}>English (EN)</option>
+                        <option value="de" {% if filters.language=='de' %}selected{% endif %}>German (DE)</option>
+                        <option value="fr" {% if filters.language=='fr' %}selected{% endif %}>French (FR)</option>
+                        <option value="es" {% if filters.language=='es' %}selected{% endif %}>Spanish (ES)</option>
+                        <option value="it" {% if filters.language=='it' %}selected{% endif %}>Italian (IT)</option>
+                        <option value="ja" {% if filters.language=='ja' %}selected{% endif %}>Japanese (JA)</option>
+                    </select>
+                </div>
+
+                <!-- Rating -->
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold text-muted mb-0">Min Rating</label>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-white">★</span>
+                        <input type="number" step="0.1" min="0" max="5" name="min_rating" class="form-control"
+                            value="{{ filters.min_rating or '' }}" placeholder="0.0">
+                    </div>
+                </div>
+
+                <!-- Year -->
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold text-muted mb-0">Year</label>
+                    <input type="number" min="1900" max="2100" name="year" class="form-control form-select-sm"
+                        value="{{ filters.year or '' }}" placeholder="YYYY">
+                </div>
+
+                <!-- Actions -->
+                <div class="col-md-4 text-end mt-4">
+                    <a href="/library" class="btn btn-sm btn-outline-secondary me-2">Clear</a>
+                    <button type="submit" class="btn btn-sm btn-primary px-4"><i class="bi bi-funnel"></i>
+                        Filter</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- TABLE -->
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 wide-table" id="libraryTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="text-center bg-light sticky-start" style="position:sticky; left:0; z-index:1;">
+                                Actions</th>
+                            <th class="sortable" onclick="sortTable(1, true)">Hits</th>
+                            <th class="sortable" onclick="sortTable(2)">Last Request</th>
+                            <th class="sortable" onclick="sortTable(3)">Added</th>
+                            <th class="sortable" onclick="sortTable(4)">Provider</th>
+                            <th>Cover</th>
+                            <th class="sortable" onclick="sortTable(6)">ASIN</th>
+                            <th class="sortable" onclick="sortTable(7)">Title</th>
+                            <th class="sortable" onclick="sortTable(8)">Series</th>
+                            <th class="sortable" onclick="sortTable(9)">Authors</th>
+                            <th class="sortable" onclick="sortTable(10)">Narrators</th>
+                            <th class="sortable" onclick="sortTable(11, true)">Rating</th>
+                            <th class="sortable" onclick="sortTable(12, true)">Runtime</th>
+                            <th class="sortable" onclick="sortTable(13)">Publisher</th>
+                            <th class="sortable" onclick="sortTable(14)">Date</th>
+                            <th class="sortable" onclick="sortTable(15)">Lang</th>
+                            <th class="sortable" onclick="sortTable(16)">Genres</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for book in books %}
+                        <tr>
+                            <td class="bg-white"
+                                style="position:sticky; left:0; box-shadow: 2px 0 5px -2px rgba(0,0,0,0.1);">
+                                <div class="btn-group">
+                                    <a href="/book/{{ book.asin }}" target="_blank"
+                                        class="btn btn-sm btn-outline-primary" title="View JSON"><i
+                                            class="bi bi-code-slash"></i></a>
+                                    <form action="/library/delete" method="post"
+                                        onsubmit="return confirm('Delete {{ book.title }}?');" class="d-inline">
+                                        <input type="hidden" name="asin" value="{{ book.asin }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete"><i
+                                                class="bi bi-trash"></i></button>
+                                    </form>
+                                </div>
+                            </td>
+                            <td class="text-center fw-bold text-primary">{{ book.access_count }}</td>
+                            <td class="small">{{ book.last_accessed or '-' }}</td>
+                            <td class="small">{{ book.cached_at or '-' }}</td>
+                            <td>
+                                {% if book.provider == 'Audible' %} <span
+                                    class="badge bg-warning text-dark border border-warning">Audible</span>
+                                {% elif book.provider == 'iTunes' %} <span
+                                    class="badge bg-info text-white border border-info">iTunes</span>
+                                {% elif book.provider == 'Goodreads' %} <span
+                                    class="badge bg-success border border-success">Goodreads</span>
+                                {% elif book.provider == 'Penguin Random House' %} <span class="badge"
+                                    style="background-color: #FF6600; color: white;">Penguin</span>
+                                {% else %} <span class="badge bg-secondary">{{ book.provider }}</span> {% endif %}
+                            </td>
+                            <td>
+                                {% if book.cover_image %}
+                                <img src="{{ book.cover_image }}"
+                                    style="height: 40px; width: 40px; object-fit: cover; border-radius: 4px;">
+                                {% else %} - {% endif %}
+                            </td>
+                            <td><code>{{ book.asin }}</code></td>
+                            <td class="fw-bold">{{ book.title }}</td>
+                            <td class="text-primary">{{ book.series_str }}</td>
+                            <td>{{ book.authors_str }}</td>
+                            <td class="text-muted">{{ book.narrators_str }}</td>
+                            <td>
+                                {% if book.rating %}
+                                <span style="display:none;">{{ book.rating }}</span>
+                                <span class="text-warning fw-bold">★ {{ "%.2f"|format(book.rating) }}</span>
+                                <span class="text-muted small ms-1">({{ compact_number(book.rating_count) }})</span>
+                                {% else %} <span class="text-muted" data-val="-1">-</span> {% endif %}
+                            </td>
+                            <td>
+                                {% if book.runtime_minutes %} {{ (book.runtime_minutes / 60)|round(1) }}h <span
+                                    style="display:none;">{{ book.runtime_minutes }}</span>
+                                {% else %} - <span style="display:none;">0</span> {% endif %}
+                            </td>
+                            <td>{{ book.publisher or '-' }}</td>
+                            <td>{{ book.published_date or '-' }}</td>
+                            <td class="text-center"><span class="badge bg-light text-dark border">{{ (book.language or
+                                    'en')|upper }}</span></td>
+                            <td>{{ book.genres_str }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="17" class="text-center p-5 text-muted">No books found matching filters.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- PAGINATION CONTROLS (With Filter Persistence) -->
+        <div class="card-footer bg-white py-3 d-flex justify-content-between align-items-center">
+            <div>
+                {% if current_page > 1 %}
+                <a href="/library?page={{ current_page - 1 }}{{ filter_params }}"
+                    class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-chevron-left"></i> Previous
+                </a>
+                {% else %}
+                <button class="btn btn-outline-secondary btn-sm" disabled><i class="bi bi-chevron-left"></i>
+                    Previous</button>
+                {% endif %}
+            </div>
+
+            <div class="text-muted small">
+                Showing up to 50 items per page
+            </div>
+
+            <div>
+                {% if current_page < total_pages %} <a href="/library?page={{ current_page + 1 }}{{ filter_params }}"
+                    class="btn btn-outline-secondary btn-sm">
+                    Next <i class="bi bi-chevron-right"></i>
+                    </a>
+                    {% else %}
+                    <button class="btn btn-outline-secondary btn-sm" disabled>Next <i
+                            class="bi bi-chevron-right"></i></button>
+                    {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Reuse sortTable function from previous steps
+    function sortTable(n, isNumeric = false) {
+        var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
+        table = document.getElementById("libraryTable");
+        switching = true;
+        dir = "asc";
+        while (switching) {
+            switching = false;
+            rows = table.rows;
+            for (i = 1; i < (rows.length - 1); i++) {
+                shouldSwitch = false;
+                x = rows[i].getElementsByTagName("TD")[n];
+                y = rows[i + 1].getElementsByTagName("TD")[n];
+                var xContent = x.textContent.trim();
+                var yContent = y.textContent.trim();
+                if (isNumeric) {
+                    var xHidden = x.getElementsByTagName("span")[0];
+                    var yHidden = y.getElementsByTagName("span")[0];
+                    var xVal = xHidden ? parseFloat(xHidden.innerText) : parseFloat(xContent.replace(/[^0-9.-]+/g, ""));
+                    var yVal = yHidden ? parseFloat(yHidden.innerText) : parseFloat(yContent.replace(/[^0-9.-]+/g, ""));
+                    if (isNaN(xVal)) xVal = -1; if (isNaN(yVal)) yVal = -1;
+                    if (dir == "asc") { if (xVal > yVal) { shouldSwitch = true; break; } }
+                    else if (dir == "desc") { if (xVal < yVal) { shouldSwitch = true; break; } }
+                } else {
+                    if (dir == "asc") { if (xContent.toLowerCase() > yContent.toLowerCase()) { shouldSwitch = true; break; } }
+                    else if (dir == "desc") { if (xContent.toLowerCase() < yContent.toLowerCase()) { shouldSwitch = true; break; } }
+                }
+            }
+            if (shouldSwitch) {
+                rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+                switching = true;
+                switchcount++;
+            } else {
+                if (switchcount == 0 && dir == "asc") { dir = "desc"; switching = true; }
+            }
+        }
+    }
+</script>
+{% endblock %}

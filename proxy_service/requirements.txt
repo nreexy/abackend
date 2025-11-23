@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+redis
+motor
+audible
+httpx
+python-dotenv
+jinja2
+python-multipart
+beautifulsoup4
+lxml
+python-jose[cryptography]
+passlib[bcrypt]
+# FIX: Pin bcrypt to 3.2.2 to fix compatibility with passlib
+bcrypt==3.2.2

@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Traffic & Device Statistics</h2>
+        <button class="btn btn-sm btn-outline-secondary" onclick="location.reload()">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+    </div>
+
+    <!-- TOP 1/3: METRICS -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 border-start border-4 border-primary h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="bg-primary bg-opacity-10 p-3 rounded me-3">
+                            <i class="bi bi-hdd-stack fs-3 text-primary"></i>
+                        </div>
+                        <div>
+                            <h6 class="text-muted mb-1">Total Requests</h6>
+                            <h2 class="mb-0 fw-bold">{{ data.total_requests }}</h2>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 border-start border-4 border-success h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="bg-success bg-opacity-10 p-3 rounded me-3">
+                            <i class="bi bi-phone fs-3 text-success"></i>
+                        </div>
+                        <div>
+                            <h6 class="text-muted mb-1">Distinct Devices</h6>
+                            <h2 class="mb-0 fw-bold">{{ data.distinct_devices }}</h2>
+                            <small class="text-muted">Unique IPs</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 border-start border-4 border-info h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="bg-info bg-opacity-10 p-3 rounded me-3">
+                            <i class="bi bi-calculator fs-3 text-info"></i>
+                        </div>
+                        <div>
+                            <h6 class="text-muted mb-1">Avg Requests / Device</h6>
+                            <h2 class="mb-0 fw-bold">{{ data.avg_per_device }}</h2>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MIDDLE: COUNTRY DISTRIBUTION -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0"><i class="bi bi-globe-americas"></i> Requests by Country</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 50px;">Flag</th>
+                                    <th>Country Code</th>
+                                    <th>Request Count</th>
+                                    <th style="width: 40%;">Distribution</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for country in data.countries %}
+                                <tr>
+                                    <td class="text-center">
+                                        {% if country.code and country.code|length == 2 %}
+                                        <img src="https://flagcdn.com/24x18/{{ country.code|lower }}.png"
+                                            alt="{{ country.code }}">
+                                        {% else %}
+                                        <i class="bi bi-question-circle text-muted"></i>
+                                        {% endif %}
+                                    </td>
+                                    <td class="fw-bold">{{ country.code }}</td>
+                                    <td>{{ country.count }}</td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="progress flex-grow-1" style="height: 8px;">
+                                                <div class="progress-bar bg-primary" role="progressbar"
+                                                    style="width: {{ country.percent }}%"></div>
+                                            </div>
+                                            <span class="ms-2 small text-muted">{{ country.percent }}%</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="4" class="text-center p-3">No location data available yet.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOTTOM: LOG TABLE -->
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-white py-3">
+            <h5 class="mb-0"><i class="bi bi-list-columns-reverse"></i> Recent Access Log</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Time (UTC)</th>
+                            <th>Device IP</th>
+                            <th>Action</th>
+                            <th>Duration</th>
+                            <th>Target (ASIN/Query)</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in data.logs %}
+                        <tr>
+                            <td class="text-muted font-monospace small">
+                                {{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}
+                            </td>
+                            <td>
+                                <span class="badge bg-light text-dark border">
+                                    <i class="bi bi-pc-display me-1"></i> {{ log.ip or 'Unknown' }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if log.action == 'search' %}
+                                <span class="badge bg-primary">Search</span>
+                                {% elif log.action == 'fetch_metadata' %}
+                                <span class="badge bg-success">Details</span>
+                                {% elif log.action == 'fetch_error' %}
+                                <span class="badge bg-danger">Error</span>
+                                {% else %}
+                                <span class="badge bg-secondary">{{ log.action }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if log.duration_ms %}
+                                <!-- Color code specific durations -->
+                                {% if log.duration_ms < 50 %} <span class="text-success fw-bold">{{
+                                    "%.0f"|format(log.duration_ms) }}ms</span>
+                                    {% elif log.duration_ms < 1000 %} <span class="text-dark">{{
+                                        "%.0f"|format(log.duration_ms) }}ms</span>
+                                        {% else %}
+                                        <span class="text-danger">{{ "%.1f"|format(log.duration_ms/1000) }}s</span>
+                                        {% endif %}
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
+                            </td>
+                            <td class="text-truncate" style="max-width: 200px;">
+                                <code>{{ log.target }}</code>
+                            </td>
+                            <td class="small text-muted">
+                                {{ log.details or '-' }}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center p-4">No logs available.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer bg-white text-center">
+            <small class="text-muted">Showing last 100 requests</small>
+        </div>
+    </div>
+</div>
+{% endblock %}

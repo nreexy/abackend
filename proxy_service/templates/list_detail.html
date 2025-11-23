@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1">
+                    <li class="breadcrumb-item"><a href="/lists">Lists</a></li>
+                    <li class="breadcrumb-item active">{{ list.name }}</li>
+                </ol>
+            </nav>
+            <h2>{{ list.name }}</h2>
+        </div>
+        <a href="{{ list.url }}" target="_blank" class="btn btn-outline-secondary">
+            <i class="bi bi-box-arrow-up-right"></i> Open on Audible
+        </a>
+    </div>
+
+    <!-- Reuse the Library Table Style -->
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">Cover</th>
+                            <th>Title</th>
+                            <th>Author</th>
+                            <th>Narrator</th>
+                            <th>Rating</th>
+                            <th class="text-end pe-4">JSON</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for book in books %}
+                        <tr>
+                            <td class="ps-4">
+                                {% if book.cover_image %}
+                                <img src="{{ book.cover_image }}"
+                                    style="height: 50px; width: 50px; object-fit: cover; border-radius: 4px;">
+                                {% else %}
+                                <div class="bg-light d-flex align-items-center justify-content-center border rounded"
+                                    style="width: 50px; height: 50px;">
+                                    <i class="bi bi-book text-muted"></i>
+                                </div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="fw-bold">{{ book.title }}</div>
+                                <small class="text-muted">{{ book.asin }}</small>
+                            </td>
+                            <td>{{ book.authors_str }}</td>
+                            <td class="text-muted">{{ book.narrators_str }}</td>
+                            <td>
+                                {% if book.rating %}
+                                <span class="text-warning fw-bold">★ {{ "%.2f"|format(book.rating) }}</span>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td class="text-end pe-4">
+                                <a href="/book/{{ book.asin }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-code-slash"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

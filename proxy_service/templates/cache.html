@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Cache Inspector</h2>
+        <button class="btn btn-sm btn-outline-secondary" onclick="location.reload()">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">Type</th>
+                        <th>Cached Content (Title/Query)</th>
+                        <th>TTL (Sec)</th>
+                        <th>Size</th>
+                        <th class="text-end pe-4">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                    <tr>
+                        <td class="ps-4">
+                            {% if item.type == 'Book Data' %}
+                            <span class="badge bg-info text-dark">Book</span>
+                            {% elif item.type == 'Search Query' %}
+                            <span class="badge bg-secondary">Search</span>
+                            {% else %}
+                            <span class="badge bg-light text-dark">Raw</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="fw-bold text-truncate" style="max-width: 350px;">{{ item.preview }}</div>
+                            <small class="text-muted font-monospace" style="font-size: 0.8em;">{{ item.key }}</small>
+                        </td>
+                        <td>
+                            {% if item.ttl == -1 %}
+                            <span class="text-muted">Forever</span>
+                            {% elif item.ttl < 60 %} <span class="text-danger fw-bold">{{ item.ttl }}s</span>
+                                {% else %}
+                                <span class="text-success">{{ item.ttl }}s</span>
+                                {% endif %}
+                        </td>
+                        <td>{{ item.size }}</td>
+                        <td class="text-end pe-4">
+                            <form action="/cache/delete" method="post" onsubmit="return confirm('Delete this key?');">
+                                <input type="hidden" name="key" value="{{ item.key }}">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="text-center p-5 text-muted">
+                            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                            Cache is empty.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
