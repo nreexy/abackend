@@ -1,12 +1,9 @@
-version: "3.8"
-
 services:
-  # --- Your Custom Proxy ---
   metadata-proxy:
     build: ./proxy_service
     container_name: metadata_proxy
     ports:
-      - "8000:8000"
+      - "${LISTEN_IP:-0.0.0.0}:8000:8000"
     environment:
       - REDIS_URL=redis://redis_cache:6379
       - MONGO_URL=mongodb://mongo_db:27017
