@@ -4,6 +4,7 @@ A high-performance, self-hosted **metadata aggregator API** and **dashboard** fo
 
 This server sits between your mobile app/media server and external data sources. It aggregates, normalizes, and caches metadata from **Audible, iTunes, Goodreads, and Penguin Random House** into a single, unified JSON format.
 
+![Library View](screenshots/Library.png)
 
 ## ✨ Features
 
@@ -19,6 +20,13 @@ This server sits between your mobile app/media server and external data sources.
     *   **Settings:** Toggle providers and configure search limits on the fly.
     *   **Logs:** Live system logs viewer.
 *   **Authentication:** Secure JWT-based authentication for API and Dashboard access.
+
+## 📸 Interface
+
+<p align="center">
+  <img src="screenshots/listsCharts.png" width="48%" alt="Lists and Charts Import">
+  <img src="screenshots/trafficStatistics.png" width="48%" alt="Traffic and Device Statistics">
+</p>
 
 ---
 
