@@ -433,3 +433,15 @@ async def get_traffic_stats():
         "countries": sorted_countries, # <--- NEW DATA
         "logs": recent_logs
     }
+
+async def delete_list_by_id(list_id: str):
+    """
+    Deletes a list definition from the database.
+    Note: This does NOT delete the books inside the list from the library,
+    it only deletes the 'collection' grouping.
+    """
+    try:
+        await lists_collection.delete_one({"_id": ObjectId(list_id)})
+        return True
+    except:
+        return False

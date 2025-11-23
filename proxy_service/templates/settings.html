@@ -17,7 +17,46 @@
     </div>
     {% endif %}
 
+    <!-- API ACCESS CARD -->
+    <div class="card shadow-sm border-0 mb-4 border-start border-4 border-primary">
+        <div class="card-body">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <h5 class="card-title mb-1"><i class="bi bi-key"></i> API Access Token</h5>
+                    <p class="text-muted small mb-0">
+                        Use this Bearer Token to authenticate external apps (e.g., Mobile App, cURL).
+                        Header: <code>Authorization: Bearer &lt;token&gt;</code>
+                    </p>
+                </div>
+            </div>
+
+            <div class="mt-3">
+                <label class="form-label fw-bold small text-uppercase text-muted">Your Token</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light"><i class="bi bi-shield-lock"></i></span>
+                    <!-- Input is readonly and type="password" to hide by default -->
+                    <input type="password" class="form-control font-monospace" id="apiTokenField"
+                        value="{{ api_token }}" readonly>
+
+                    <button class="btn btn-outline-secondary" type="button" onclick="toggleTokenVisibility()"
+                        title="Show/Hide">
+                        <i class="bi bi-eye" id="toggleIcon"></i>
+                    </button>
+
+                    <button class="btn btn-primary" type="button" onclick="copyToken()" id="copyBtn">
+                        <i class="bi bi-clipboard"></i> Copy Key
+                    </button>
+                </div>
+                <div class="form-text text-danger" id="copyMsg" style="visibility: hidden; height: 20px;">
+                    <i class="bi bi-check-circle-fill"></i> Copied to clipboard!
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- EXISTING ROW (Configuration & Danger Zone) -->
     <div class="row">
+
         <!-- Configuration Card -->
         <div class="col-md-8">
             <div class="card shadow-sm border-0 mb-4">
@@ -114,4 +153,53 @@
         </div>
     </div>
 </div>
+
+<script>
+    function toggleTokenVisibility() {
+        const field = document.getElementById("apiTokenField");
+        const icon = document.getElementById("toggleIcon");
+
+        if (field.type === "password") {
+            field.type = "text";
+            icon.classList.remove("bi-eye");
+            icon.classList.add("bi-eye-slash");
+        } else {
+            field.type = "password";
+            icon.classList.remove("bi-eye-slash");
+            icon.classList.add("bi-eye");
+        }
+    }
+
+    function copyToken() {
+        const field = document.getElementById("apiTokenField");
+
+        // Select and Copy
+        field.select();
+        field.setSelectionRange(0, 99999); // For mobile devices
+        navigator.clipboard.writeText(field.value);
+
+        // Show Feedback
+        const msg = document.getElementById("copyMsg");
+        const btn = document.getElementById("copyBtn");
+
+        msg.style.visibility = "visible";
+        msg.className = "form-text text-success fw-bold"; // Change to success color
+
+        // Reset button text temporarily
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-check"></i> Copied';
+        btn.classList.remove("btn-primary");
+        btn.classList.add("btn-success");
+
+        setTimeout(() => {
+            msg.style.visibility = "hidden";
+            btn.innerHTML = originalHtml;
+            btn.classList.remove("btn-success");
+            btn.classList.add("btn-primary");
+        }, 2000);
+    }
+</script>
+
+
+
 {% endblock %}

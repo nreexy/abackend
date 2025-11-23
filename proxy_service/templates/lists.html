@@ -21,18 +21,14 @@
 
                         <!-- SOURCE BADGES -->
                         {% if lst.type == 'custom' %}
-                        <span class="badge bg-secondary" title="Manual Collection">
-                            <i class="bi bi-person-fill"></i> Custom
-                        </span>
+                        <span class="badge bg-secondary" title="Manual Collection"><i class="bi bi-person-fill"></i>
+                            Custom</span>
                         {% elif lst.source == 'Goodreads' or 'goodreads.com' in lst.url %}
-                        <span class="badge bg-success" title="Imported from Goodreads">
-                            <i class="bi bi-book"></i> Goodreads
-                        </span>
+                        <span class="badge bg-success" title="Imported from Goodreads"><i class="bi bi-book"></i>
+                            Goodreads</span>
                         {% else %}
-                        <!-- Default to Audible if source is missing (legacy lists) -->
-                        <span class="badge bg-warning text-dark" title="Imported from Audible">
-                            <i class="bi bi-headphones"></i> Audible
-                        </span>
+                        <span class="badge bg-warning text-dark" title="Imported from Audible"><i
+                                class="bi bi-headphones"></i> Audible</span>
                         {% endif %}
                     </div>
 
@@ -50,8 +46,19 @@
                         <a href="/lists/{{ lst._id }}" class="btn btn-sm btn-outline-primary">View Collection</a>
                     </div>
                 </div>
-                <div class="card-footer bg-transparent border-0 text-muted small">
-                    Imported: {{ lst.created_at.strftime('%Y-%m-%d') }}
+
+                <!-- CARD FOOTER with Actions -->
+                <div class="card-footer bg-transparent border-top-0 d-flex justify-content-between align-items-center">
+                    <small class="text-muted">Imported: {{ lst.created_at.strftime('%Y-%m-%d') }}</small>
+
+                    <!-- DELETE BUTTON -->
+                    <form action="/lists/delete" method="post"
+                        onsubmit="return confirm('Are you sure you want to delete the list &quot;{{ lst.name }}&quot;?');">
+                        <input type="hidden" name="list_id" value="{{ lst._id }}">
+                        <button type="submit" class="btn btn-sm btn-outline-danger border-0" title="Delete List">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </form>
                 </div>
             </div>
         </div>
@@ -62,62 +69,61 @@
         </div>
         {% endfor %}
     </div>
-</div>
 
-<!-- Import Modal -->
-<div class="modal fade" id="importModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Import Audible List</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p>Paste a URL from Audible (Best Sellers, Series Page, Search Result).</p>
-                <div class="mb-3">
-                    <label class="form-label">Audible URL</label>
-                    <input type="url" class="form-control" id="listUrl"
-                        placeholder="https://www.audible.com/charts/best">
+    <!-- Import Modal -->
+    <div class="modal fade" id="importModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Import Audible List</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div id="importStatus" class="alert alert-info d-none">
-                    <span class="spinner-border spinner-border-sm me-2"></span> Processing ASINs...
+                <div class="modal-body">
+                    <p>Paste a URL from Audible (Best Sellers, Series Page, Search Result).</p>
+                    <div class="mb-3">
+                        <label class="form-label">Audible URL</label>
+                        <input type="url" class="form-control" id="listUrl"
+                            placeholder="https://www.audible.com/charts/best">
+                    </div>
+                    <div id="importStatus" class="alert alert-info d-none">
+                        <span class="spinner-border spinner-border-sm me-2"></span> Processing ASINs...
+                    </div>
                 </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-primary" onclick="startImport()">Import</button>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" onclick="startImport()">Import</button>
+                </div>
             </div>
         </div>
     </div>
-</div>
 
-<script>
-    async function startImport() {
-        const url = document.getElementById('listUrl').value;
-        const status = document.getElementById('importStatus');
+    <script>
+        async function startImport() {
+            const url = document.getElementById('listUrl').value;
+            const status = document.getElementById('importStatus');
 
-        if (!url) return;
+            if (!url) return;
 
-        status.classList.remove('d-none');
+            status.classList.remove('d-none');
 
-        try {
-            const res = await fetch('/lists/import', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: url })
-            });
-            const data = await res.json();
+            try {
+                const res = await fetch('/lists/import', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: url })
+                });
+                const data = await res.json();
 
-            if (res.ok) {
-                location.reload();
-            } else {
-                alert("Error: " + data.detail);
+                if (res.ok) {
+                    location.reload();
+                } else {
+                    alert("Error: " + data.detail);
+                    status.classList.add('d-none');
+                }
+            } catch (e) {
+                alert("Network Error");
                 status.classList.add('d-none');
             }
-        } catch (e) {
-            alert("Network Error");
-            status.classList.add('d-none');
         }
-    }
-</script>
-{% endblock %}
+    </script>
+    {% endblock %}

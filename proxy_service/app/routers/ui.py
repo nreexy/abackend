@@ -20,7 +20,8 @@ from app.database import (
     get_detailed_stats,
     get_all_lists,
     get_list_by_id,
-    get_cache
+    get_cache,
+    delete_list_by_id
 )
 from app.utils import get_system_logs
 
@@ -134,9 +135,20 @@ async def delete_book_action(request: Request, asin: str = Form(...)):
 @router.get("/settings")
 async def view_settings(request: Request):
     if not await check_ui_auth(request): return RedirectResponse("/login")
+    
     config = await get_system_settings()
-    return templates.TemplateResponse("settings.html", {"request": request, "config": config, "active_page": "settings"})
+    
+    # Retrieve the token from the cookie to show it in the UI
+    token = request.cookies.get("access_token", "")
+    
+    return templates.TemplateResponse("settings.html", {
+        "request": request, 
+        "config": config, 
+        "active_page": "settings",
+        "api_token": token # <--- Pass the token here
+    })
 
+    
 @router.post("/settings/update")
 async def update_settings(
     request: Request,
@@ -242,3 +254,15 @@ async def view_documentation(request: Request):
         "request": request, 
         "active_page": "documentation"
     })
+
+
+
+@router.post("/lists/delete")
+async def delete_list_action(request: Request, list_id: str = Form(...)):
+    """Action to delete a list"""
+    if not await check_ui_auth(request): return RedirectResponse("/login")
+    
+    await delete_list_by_id(list_id)
+    
+    # Redirect back to the lists page
+    return RedirectResponse(url="/lists", status_code=303)
