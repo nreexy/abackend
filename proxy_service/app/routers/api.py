@@ -85,15 +85,30 @@ def _init_stats(book_data):
     if "access_count" not in book_data: book_data["access_count"] = 1
     return book_data
 
+# --- HELPER: TRANSFORM TO AUDIOBOOKSHELF FORMAT ---
 def transform_to_abs_format(book: dict):
-    """Maps internal schema to Audiobookshelf JSON schema."""
+    """
+    Maps internal schema to Audiobookshelf JSON schema.
+    """
+    # 1. Duration: Convert minutes to seconds
     duration = (book.get("runtime_minutes") or 0) * 60
+    
+    # 2. Publish Year: Extract YYYY from YYYY-MM-DD
     pub_date = book.get("published_date")
     pub_year = pub_date[:4] if pub_date and len(pub_date) >= 4 else None
 
+    # 3. Series mapping (ABS expects list of objects)
     series_mapped = []
     for s in book.get("series", []):
-        series_mapped.append({"sequence": s.get("sequence"), "name": s.get("name")})
+        series_mapped.append({
+            "sequence": s.get("sequence"),
+            "name": s.get("name")
+        })
+
+    # 4. Flatten Authors List -> Single String
+    # e.g. ["Author A", "Author B"] -> "Author A, Author B"
+    author_string = ", ".join(book.get("authors", []))
+    narrator_string = ", ".join(book.get("narrators", []))
 
     return {
         "id": book.get("asin"), 
@@ -101,8 +116,12 @@ def transform_to_abs_format(book: dict):
         "isbn": book.get("asin"),
         "title": book.get("title"),
         "subtitle": book.get("subtitle"),
-        "authors": book.get("authors", []),
-        "narrators": book.get("narrators", []),
+        
+        # --- CHANGED FIELD ---
+        "author": author_string,    
+        "narrator": narrator_string,
+        # ---------------------
+
         "series": series_mapped,
         "genres": book.get("genres", []),
         "publishedYear": pub_year,
@@ -114,6 +133,7 @@ def transform_to_abs_format(book: dict):
         "abridged": False,
         "cover": book.get("cover_image"),
         "duration": duration,
+        
         "provider": book.get("provider"),
         "rating": book.get("rating"),
         "rating_count": book.get("rating_count")

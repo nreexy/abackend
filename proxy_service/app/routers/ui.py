@@ -24,6 +24,8 @@ from app.database import (
     delete_list_by_id
 )
 from app.utils import get_system_logs
+from app.limiter import limiter
+
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
@@ -47,13 +49,22 @@ async def login_page(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
 
 @router.post("/login")
-async def login(response: Response, request: Request, username: str = Form(...), password: str = Form(...)):
+@limiter.limit("5/minute")
+async def login(request: Request, response: Response, username: str = Form(...), password: str = Form(...)):
     if username == ADMIN_USERNAME and verify_password(password, ADMIN_PASSWORD_HASH):
         # Create Token
         access_token = create_access_token(data={"sub": username})
         # Set Cookie (HttpOnly)
         resp = RedirectResponse(url="/dashboard", status_code=status.HTTP_303_SEE_OTHER)
-        resp.set_cookie(key="access_token", value=access_token, httponly=True)
+        
+        resp.set_cookie(
+            key="access_token", 
+            value=access_token, 
+            httponly=True,   # JavaScript cannot read it
+            secure=False,    # Set to True if you are using HTTPS
+            samesite="lax",  # Protects against CSRF
+            max_age=60*60*24*7 # 7 Days
+        )
         return resp
     else:
         return templates.TemplateResponse("login.html", {"request": request, "error": "Invalid Username or Password"})
@@ -148,7 +159,7 @@ async def view_settings(request: Request):
         "api_token": token # <--- Pass the token here
     })
 
-    
+
 @router.post("/settings/update")
 async def update_settings(
     request: Request,
