@@ -1,6 +1,7 @@
 import os
 from collections import deque
-
+import hashlib
+from app.config import SECRET_KEY
 
 # Map of common full names to ISO codes
 LANGUAGE_MAP = {
@@ -97,3 +98,16 @@ def get_system_logs(limit: int = 200):
             return list(last_lines)
     except Exception as e:
         return [f"Error reading logs: {str(e)}"]
+
+
+def get_device_hash(ip: str) -> str:
+    """
+    Anonymizes an IP address using a Salted Hash.
+    Returns the first 12 characters of the hash (enough for uniqueness).
+    """
+    if not ip or ip == "Unknown" or ip == "127.0.0.1":
+        return "Localhost"
+    
+    # Combine IP with Secret Key to prevent rainbow table attacks
+    raw = f"{ip}-{SECRET_KEY}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:12]

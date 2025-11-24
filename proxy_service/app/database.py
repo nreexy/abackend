@@ -2,12 +2,12 @@ import os
 import json
 import datetime
 import uuid
+import hashlib
+import httpx
 from motor.motor_asyncio import AsyncIOMotorClient
 import redis.asyncio as redis
 from bson.objectid import ObjectId
 from pymongo import ASCENDING, DESCENDING
-import httpx
-
 
 # --- CONFIGURATION ---
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
@@ -18,26 +18,21 @@ mongo_client = AsyncIOMotorClient(MONGO_URL)
 db = mongo_client.audiobook_metadata
 
 # Collections
-books_collection = db.books          # Main Library Storage (Persistent)
+books_collection = db.books          # Main Library
 custom_fields_collection = db.custom_fields
-logs_collection = db.request_logs
+logs_collection = db.request_logs    # Activity Logs
 settings_collection = db.settings
 lists_collection = db.lists
 provider_stats_collection = db.provider_stats
 
-# Redis (Cache Layer)
+# Redis
 redis_client = redis.from_url(REDIS_URL, decode_responses=True)
 CACHE_TTL = 86400 # 24 Hours
 
-# --- INITIALIZATION (SCALING) ---
+# --- INITIALIZATION ---
 async def init_db_indexes():
-    """
-    Creates indexes to ensure performance with 100k+ items.
-    Called on app startup.
-    """
-    # Unique ASIN
+    """Creates indexes for performance on startup."""
     await books_collection.create_index([("asin", ASCENDING)], unique=True)
-    # Search/Sort fields
     await books_collection.create_index([("title", ASCENDING)])
     await books_collection.create_index([("authors", ASCENDING)])
     await books_collection.create_index([("added_at", DESCENDING)])
@@ -47,8 +42,7 @@ async def init_db_indexes():
 
 async def upsert_book_to_db(book_data: dict):
     """
-    Saves or Updates a book in MongoDB (Permanent Storage).
-    Handles stats logic to prevent overwriting counts or creation dates.
+    Saves book to MongoDB. Removes conflicting fields to prevent Code 40 errors.
     """
     if not book_data or "asin" not in book_data: return
 
@@ -56,69 +50,47 @@ async def upsert_book_to_db(book_data: dict):
     
     # Prepare update data
     update_data = book_data.copy()
-    
-    # --- FIX: REMOVE CONFLICTING FIELDS ---
-    # We do NOT want to overwrite these if the book already exists
+    # Remove fields that should NOT be overwritten on update
     update_data.pop("added_at", None) 
-    update_data.pop("access_count", None) # Fixes the Code 40 Conflict Error
+    update_data.pop("access_count", None) # Fixes MongoDB Conflict Error
     
-    # Always update modification time
     update_data["updated_at"] = now
 
     await books_collection.update_one(
         {"asin": book_data["asin"]},
         {
             "$set": update_data,
-            # Only set these if the document is being inserted (New Book)
             "$setOnInsert": {"added_at": now, "access_count": 1}
         },
         upsert=True
     )
 
 async def get_book_from_db(asin: str):
-    """Retrieves a book from MongoDB."""
     return await books_collection.find_one({"asin": asin}, {"_id": 0})
 
-async def get_library_page(
-    page: int = 1, 
-    limit: int = 50, 
-    sort_by: str = "added_at", 
-    order: int = -1,
-    filters: dict = None  # <--- NEW PARAMETER
-):
+async def get_library_page(page: int = 1, limit: int = 50, sort_by: str = "added_at", order: int = -1, filters: dict = None):
     """
-    Paginated fetch with filtering capabilities.
+    Paginated fetch with filtering.
     """
     skip = (page - 1) * limit
     
-    # 1. Build Query Object
     query = {}
     if filters:
-        # Rating: Greater than or equal
         if filters.get("min_rating"):
             query["rating"] = {"$gte": float(filters["min_rating"])}
-        
-        # Provider: Exact match
         if filters.get("provider"):
             query["provider"] = filters["provider"]
-            
-        # Language: Exact match (case insensitive handled by normalization, but DB is case sensitive)
         if filters.get("language"):
             query["language"] = filters["language"].lower()
-            
-        # Year: String starts with YYYY (Regex)
         if filters.get("year"):
             query["published_date"] = {"$regex": f"^{filters['year']}"}
 
-    # 2. Execute Query
     cursor = books_collection.find(query, {"_id": 0})
     cursor.sort(sort_by, order).skip(skip).limit(limit)
     books = await cursor.to_list(length=limit)
-    
-    # 3. Get Count (matching the filter)
     total_count = await books_collection.count_documents(query)
     
-    # Format Dates/Lists for Display (Keep existing formatting logic)
+    # Format for UI
     formatted = []
     for data in books:
         data['authors_str'] = ", ".join(data.get("authors", []))
@@ -139,54 +111,37 @@ async def get_library_page(
     return formatted, total_count
 
 async def delete_book_from_library(asin: str):
-    """Removes from both Permanent DB and Cache."""
     await books_collection.delete_one({"asin": asin})
     await redis_client.delete(f"book_v7:{asin}")
 
-# --- CACHE FUNCTIONS (REDIS) ---
+# --- CACHE FUNCTIONS ---
 
 async def get_cache(key: str):
     data = await redis_client.get(key)
     return json.loads(data) if data else None
 
 async def set_cache(key: str, data: dict, expire: int = CACHE_TTL):
-    # Helper to serialize datetimes for JSON
     def json_serial(obj):
-        if isinstance(obj, (datetime.datetime, datetime.date)):
-            return obj.isoformat()
+        if isinstance(obj, (datetime.datetime, datetime.date)): return obj.isoformat()
         raise TypeError(f"Type {type(obj)} not serializable")
-
     await redis_client.set(key, json.dumps(data, default=json_serial), ex=expire)
 
 async def inspect_cache(limit: int = 100):
-    """For the Cache Inspector UI"""
     items = []
     count = 0
     async for key in redis_client.scan_iter("*"):
         if count >= limit: break
         val = await redis_client.get(key)
         ttl = await redis_client.ttl(key)
-        
-        item_type = "Unknown"
-        preview = "N/A"
         size = len(val) if val else 0
         
-        if "search" in key: item_type = "Search Query"
-        elif "book" in key: item_type = "Book Data"
-
+        item_type = "Search" if "search" in key else "Book" if "book" in key else "Data"
         try:
-            if val:
-                data = json.loads(val)
-                preview = data.get("title", "Unknown Title")
-                if preview == "Unknown Title" and "asin" in data:
-                    preview = f"ASIN: {data['asin']}"
-        except:
-            preview = str(val)[:50]
+            data = json.loads(val)
+            preview = data.get("title", f"ASIN: {data.get('asin', 'Unknown')}")
+        except: preview = str(val)[:50]
 
-        items.append({
-            "key": key, "type": item_type, "preview": preview,
-            "ttl": ttl, "size": f"{round(size/1024, 2)} KB"
-        })
+        items.append({"key": key, "type": item_type, "preview": preview, "ttl": ttl, "size": f"{round(size/1024, 2)} KB"})
         count += 1
     return items
 
@@ -196,10 +151,12 @@ async def delete_cache_key(key: str):
 async def flush_all_cache():
     await redis_client.flushdb()
 
-# --- SETTINGS LOGIC ---
+# --- SETTINGS ---
+
 DEFAULT_SETTINGS = {
     "providers": {"audible": True, "itunes": True, "goodreads": True, "prh": True},
-    "search_limit": 5, "scrape_limit_pages": 100 
+    "search_limit": 5, 
+    "scrape_limit_pages": 100
 }
 
 async def get_system_settings():
@@ -207,14 +164,9 @@ async def get_system_settings():
     return config if config else DEFAULT_SETTINGS
 
 async def save_system_settings(providers: dict, search_limit: int, scrape_limit_pages: int):
-    """Upsert settings including scrape limit"""
     await settings_collection.update_one(
         {"_id": "global_config"},
-        {"$set": {
-            "providers": providers,
-            "search_limit": search_limit,
-            "scrape_limit_pages": scrape_limit_pages # <--- Save new field
-        }},
+        {"$set": {"providers": providers, "search_limit": search_limit, "scrape_limit_pages": scrape_limit_pages}},
         upsert=True
     )
 
@@ -225,11 +177,36 @@ async def get_custom_fields(asin: str):
 async def save_custom_fields(asin: str, fields: dict):
     await custom_fields_collection.update_one({"asin": asin}, {"$set": fields}, upsert=True)
 
-# --- LOGGING & STATS ---
-async def log_activity(action: str, target: str, details: str = None):
+# --- LOGGING & STATS (Unified) ---
+
+async def log_activity(action: str, target: str, details: str = None, device_id: str = "Unknown", country: str = "Unknown", duration_ms: float = 0.0, ip: str = None):
+    """
+    Logs activity with Debouncing logic.
+    Accepts either 'device_id' (hashed) or 'ip' (legacy/fallback).
+    """
+    # Use IP as fallback ID if device_id not passed
+    final_id = device_id if device_id != "Unknown" else (ip or "Unknown")
+    
+    # 1. Debounce Hash
+    raw_key = f"{final_id}:{action}:{target}"
+    log_hash = hashlib.md5(raw_key.encode()).hexdigest()
+    debounce_key = f"log_debounce:{log_hash}"
+
+    # 2. Atomic Lock check (5 seconds)
+    is_new = await redis_client.set(debounce_key, "1", ex=5, nx=True)
+    if not is_new: return
+
+    # 3. Log
     await logs_collection.insert_one({
         "timestamp": datetime.datetime.utcnow(),
-        "action": action, "target": target, "details": details
+        "action": action,
+        "target": target,
+        "details": details,
+        "device_id": final_id,
+        "country": country,
+        "duration_ms": duration_ms,
+        # Keep 'ip' field for legacy compatibility if needed, but prefer device_id
+        "ip": ip if ip else final_id 
     })
 
 async def log_provider_stats(request_id: str, provider: str, duration_ms: float, result_count: int, status: str):
@@ -239,44 +216,64 @@ async def log_provider_stats(request_id: str, provider: str, duration_ms: float,
         "duration_ms": duration_ms, "result_count": result_count, "status": status
     })
 
-async def get_dashboard_stats():
+async def get_traffic_stats():
     total_requests = await logs_collection.count_documents({})
-    pipeline = [
-        {"$match": {"action": "fetch_metadata"}},
-        {"$group": {"_id": "$target", "title": {"$first": "$details"}, "count": {"$sum": 1}}},
-        {"$sort": {"count": -1}}, {"$limit": 10}
+
+    # 1. Distinct Devices
+    pipeline_devices = [{"$group": {"_id": "$device_id"}}, {"$count": "count"}]
+    dev_res = await logs_collection.aggregate(pipeline_devices).to_list(length=1)
+    distinct_devices = dev_res[0]["count"] if dev_res else 0
+
+    # 2. Country Stats
+    pipeline_geo = [
+        {"$group": {"_id": {"$ifNull": ["$country", "Unknown"]}, "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}}
     ]
-    top_books = await logs_collection.aggregate(pipeline).to_list(length=10)
-    recent_logs = await logs_collection.find().sort("timestamp", -1).limit(20).to_list(length=20)
-    return {"total": total_requests, "top_books": top_books, "recent_logs": recent_logs}
+    geo_groups = await logs_collection.aggregate(pipeline_geo).to_list(length=None)
+
+    sorted_countries = []
+    for entry in geo_groups:
+        code = entry["_id"]
+        count = entry["count"]
+        # Filter out internal/unknown if desired
+        percent = round((count/total_requests)*100, 1) if total_requests > 0 else 0
+        sorted_countries.append({"code": code, "count": count, "percent": percent})
+
+    avg_per_device = round(total_requests / distinct_devices, 2) if distinct_devices else 0
+    
+    # 3. Logs
+    recent_logs = await logs_collection.find().sort("timestamp", -1).limit(100).to_list(length=100)
+
+    return {
+        "total_requests": total_requests,
+        "distinct_devices": distinct_devices,
+        "avg_per_device": avg_per_device,
+        "countries": sorted_countries,
+        "logs": recent_logs
+    }
 
 async def get_detailed_stats():
     pipeline = [
-        {
-            "$group": {
-                "_id": "$provider",
-                "total_calls": {"$sum": 1},
-                "total_results": {"$sum": "$result_count"},
-                "avg_latency": {"$avg": "$duration_ms"},
-                "successful_calls": {"$sum": {"$cond": [{"$eq": ["$status", "success"]}, 1, 0]}}
-            }
-        },
+        {"$group": {"_id": "$provider", "total_calls": {"$sum": 1}, "total_results": {"$sum": "$result_count"}, "avg_latency": {"$avg": "$duration_ms"}, "successful_calls": {"$sum": {"$cond": [{"$eq": ["$status", "success"]}, 1, 0]}}}},
         {"$sort": {"total_calls": -1}}
     ]
     stats = await provider_stats_collection.aggregate(pipeline).to_list(length=None)
     recent = await provider_stats_collection.find().sort("timestamp", -1).limit(50).to_list(length=50)
     return {"aggregated": stats, "recent": recent}
 
+async def get_dashboard_stats():
+    total_requests = await logs_collection.count_documents({})
+    pipeline = [{"$match": {"action": "fetch_metadata"}}, {"$group": {"_id": "$target", "title": {"$first": "$details"}, "count": {"$sum": 1}}}, {"$sort": {"count": -1}}, {"$limit": 10}]
+    top_books = await logs_collection.aggregate(pipeline).to_list(length=10)
+    recent_logs = await logs_collection.find().sort("timestamp", -1).limit(20).to_list(length=20)
+    return {"total": total_requests, "top_books": top_books, "recent_logs": recent_logs}
+
 # --- LISTS LOGIC ---
+
 async def save_imported_list(name: str, url: str, asins: list, source: str = "Audible"):
-    """Saves a list of ASINs with a Source identifier"""
     doc = {
-        "name": name, 
-        "url": url, 
-        "asins": asins, 
-        "count": len(asins),
-        "type": "imported",
-        "source": source, # <--- Save the source field
+        "name": name, "url": url, "asins": asins, "count": len(asins),
+        "type": "imported", "source": source,
         "created_at": datetime.datetime.utcnow(),
         "updated_at": datetime.datetime.utcnow()
     }
@@ -286,7 +283,7 @@ async def create_custom_list(name: str, asins: list):
     internal_id = f"custom:{uuid.uuid4()}"
     doc = {
         "name": name, "url": internal_id, "asins": asins, "count": len(asins),
-        "type": "custom",
+        "type": "custom", "source": "Custom",
         "created_at": datetime.datetime.utcnow(),
         "updated_at": datetime.datetime.utcnow()
     }
@@ -297,151 +294,11 @@ async def get_all_lists():
     return await lists_collection.find().sort("created_at", -1).to_list(length=None)
 
 async def get_list_by_id(list_id: str):
-    try:
-        return await lists_collection.find_one({"_id": ObjectId(list_id)})
+    try: return await lists_collection.find_one({"_id": ObjectId(list_id)})
     except: return None
 
-
-
-    # --- UPDATE LOGGING ---
-async def log_activity(
-    action: str, 
-    target: str, 
-    details: str = None, 
-    ip: str = "Unknown", 
-    duration_ms: float = 0.0 # <--- NEW PARAMETER
-):
-    """
-    Logs activity with IP address and Duration.
-    """
-    await logs_collection.insert_one({
-        "timestamp": datetime.datetime.utcnow(),
-        "action": action,
-        "target": target,
-        "details": details,
-        "ip": ip,
-        "duration_ms": duration_ms # <--- Save field
-    })
-
-# --- NEW STATISTICS FUNCTION ---
-async def get_traffic_stats():
-    """
-    Calculates:
-    1. Total Requests
-    2. Distinct Devices (Unique IPs)
-    3. Avg Requests per Device
-    4. Recent Logs with IP
-    """
-    # 1. Total Count
-    total_requests = await logs_collection.count_documents({})
-
-    # 2. Distinct Devices (Unique IPs)
-    # Note: .distinct() can be slow on massive datasets, but fine for <1M logs.
-    # For massive scale, we would use the aggregation framework.
-    unique_ips = await logs_collection.distinct("ip")
-    distinct_devices = len(unique_ips)
-
-    # 3. Average
-    avg_per_device = 0
-    if distinct_devices > 0:
-        avg_per_device = round(total_requests / distinct_devices, 2)
-
-    # 4. Recent Logs (Table Data)
-    # We exclude 'fetch_error' from the table to keep it clean, or remove the filter to see all.
-    cursor = logs_collection.find().sort("timestamp", -1).limit(100)
-    recent_logs = await cursor.to_list(length=100)
-
-    return {
-        "total_requests": total_requests,
-        "distinct_devices": distinct_devices,
-        "avg_per_device": avg_per_device,
-        "logs": recent_logs
-    }
-
-
-async def get_traffic_stats():
-    """
-    Calculates traffic stats including Country distribution.
-    """
-    # 1. Total Count
-    total_requests = await logs_collection.count_documents({})
-
-    # 2. Distinct Devices & IP Aggregation
-    # Group by IP first to get counts per device
-    pipeline = [
-        {"$group": {"_id": "$ip", "count": {"$sum": 1}}},
-        {"$sort": {"count": -1}}
-    ]
-    ip_groups = await logs_collection.aggregate(pipeline).to_list(length=None)
-    distinct_devices = len(ip_groups)
-
-    # 3. Country Resolution (With Redis Caching)
-    country_stats = {} # {"US": 100, "DE": 50}
-    
-    for entry in ip_groups:
-        ip = entry["_id"]
-        count = entry["count"]
-        
-        if not ip or ip == "Unknown" or ip == "127.0.0.1":
-            country = "Local/Unknown"
-        else:
-            # Check Cache First
-            geo_key = f"geo:{ip}"
-            cached_country = await redis_client.get(geo_key)
-            
-            if cached_country:
-                country = cached_country
-            else:
-                # Fetch from API if not cached
-                try:
-                    # Using ip-api.com (Free for non-commercial, 45 req/min)
-                    async with httpx.AsyncClient() as client:
-                        resp = await client.get(f"http://ip-api.com/json/{ip}", timeout=2.0)
-                        if resp.status_code == 200:
-                            data = resp.json()
-                            country = data.get("countryCode", "Unknown")
-                            # Cache for 30 days (IPs rarely change countries)
-                            await redis_client.set(geo_key, country, ex=2592000)
-                        else:
-                            country = "Unknown"
-                except:
-                    country = "Unknown"
-
-        # Aggregate into Country Map
-        country_stats[country] = country_stats.get(country, 0) + count
-
-    # Format Country Stats for UI (Sort by count)
-    sorted_countries = [
-        {"code": k, "count": v, "percent": round((v/total_requests)*100, 1)} 
-        for k, v in country_stats.items()
-    ]
-    sorted_countries.sort(key=lambda x: x['count'], reverse=True)
-
-    # 4. Averages
-    avg_per_device = 0
-    if distinct_devices > 0:
-        avg_per_device = round(total_requests / distinct_devices, 2)
-
-    # 5. Recent Logs
-    cursor = logs_collection.find().sort("timestamp", -1).limit(100)
-    recent_logs = await cursor.to_list(length=100)
-
-    return {
-        "total_requests": total_requests,
-        "distinct_devices": distinct_devices,
-        "avg_per_device": avg_per_device,
-        "countries": sorted_countries, # <--- NEW DATA
-        "logs": recent_logs
-    }
-
 async def delete_list_by_id(list_id: str):
-    """
-    Deletes a list definition from the database.
-    Note: This does NOT delete the books inside the list from the library,
-    it only deletes the 'collection' grouping.
-    """
     try:
         await lists_collection.delete_one({"_id": ObjectId(list_id)})
         return True
-    except:
-        return False
+    except: return False

@@ -3,10 +3,12 @@ import uuid
 import time
 import datetime
 from typing import Optional, List
+import httpx
+
 from fastapi import APIRouter, HTTPException, Query, Depends, Request
 from pydantic import BaseModel
 
-# Imports from your app structure
+# --- IMPORTS ---
 from app.database import (
     get_cache, 
     set_cache, 
@@ -18,11 +20,14 @@ from app.database import (
     save_imported_list,
     create_custom_list,
     upsert_book_to_db, 
-    get_book_from_db
+    get_book_from_db,
+    redis_client 
 )
 from app.services import audible, itunes, goodreads, compiler, prh
 from app.auth import get_current_user
+from app.utils import get_device_hash
 
+# Protect all routes
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
 # --- MODELS ---
@@ -37,38 +42,110 @@ class CreateListRequest(BaseModel):
     name: str
     asins: List[str]
 
-# --- HELPER: STATS INITIALIZER ---
+# --- HELPERS ---
+
+async def process_client_info(request: Request):
+    """
+    Resolves IP to Country and Anonymized Device Hash.
+    """
+    client_ip = request.client.host if request.client else "Unknown"
+    
+    if client_ip in ["127.0.0.1", "::1", "Unknown"]:
+        return "Localhost", "Local"
+
+    # 1. Check Redis for Country
+    geo_key = f"geo_ip:{client_ip}"
+    country = await redis_client.get(geo_key)
+
+    # 2. If missing, fetch from API
+    if not country:
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(f"http://ip-api.com/json/{client_ip}", timeout=1.5)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    country = data.get("countryCode", "Unknown")
+                else:
+                    country = "Unknown"
+        except:
+            country = "Unknown"
+        
+        await redis_client.set(geo_key, country, ex=2592000) # Cache 30 days
+
+    # 3. Anonymize IP
+    device_hash = get_device_hash(client_ip)
+    
+    return device_hash, country
+
 def _init_stats(book_data):
+    """Injects default stats fields."""
     now = datetime.datetime.utcnow().isoformat()
     if "cached_at" not in book_data: book_data["cached_at"] = now
     if "last_accessed" not in book_data: book_data["last_accessed"] = now
     if "access_count" not in book_data: book_data["access_count"] = 1
     return book_data
 
-# --- HELPER: BENCHMARKING ---
+def transform_to_abs_format(book: dict):
+    """Maps internal schema to Audiobookshelf JSON schema."""
+    duration = (book.get("runtime_minutes") or 0) * 60
+    pub_date = book.get("published_date")
+    pub_year = pub_date[:4] if pub_date and len(pub_date) >= 4 else None
+
+    series_mapped = []
+    for s in book.get("series", []):
+        series_mapped.append({"sequence": s.get("sequence"), "name": s.get("name")})
+
+    return {
+        "id": book.get("asin"), 
+        "asin": book.get("asin"),
+        "isbn": book.get("asin"),
+        "title": book.get("title"),
+        "subtitle": book.get("subtitle"),
+        "authors": book.get("authors", []),
+        "narrators": book.get("narrators", []),
+        "series": series_mapped,
+        "genres": book.get("genres", []),
+        "publishedYear": pub_year,
+        "publishedDate": pub_date,
+        "publisher": book.get("publisher"),
+        "description": book.get("description"),
+        "language": book.get("language"),
+        "explicit": False,
+        "abridged": False,
+        "cover": book.get("cover_image"),
+        "duration": duration,
+        "provider": book.get("provider"),
+        "rating": book.get("rating"),
+        "rating_count": book.get("rating_count")
+    }
+
 async def benchmark_call(request_id: str, provider_name: str, func, *args, **kwargs):
     start_time = time.time()
     status = "success"
     results = []
     try:
-        # Check if the function is a coroutine (async) or a regular function
         if asyncio.iscoroutinefunction(func):
             results = await func(*args, **kwargs)
         else:
-            # If it's a sync function (like Audible), run it in a separate thread
             results = await asyncio.to_thread(func, *args, **kwargs)
     except Exception as e:
         status = "error"
         print(f"❌ Error in {provider_name}: {e}")
     finally:
         duration = (time.time() - start_time) * 1000
+        count = 0
         if isinstance(results, list): count = len(results)
         elif isinstance(results, tuple): count = len(results[1]) if len(results) > 1 else 0
         elif results: count = 1
-        else: count = 0
         
         await log_provider_stats(request_id, provider_name, round(duration, 2), result_count=count, status=status)
     return results
+
+# --- PING ENDPOINT ---
+@router.get("/ping")
+async def ping():
+    """Simple connectivity check."""
+    return {"success": True}
 
 # --- 1. SEARCH ENDPOINT ---
 @router.get("/search")
@@ -81,7 +158,7 @@ async def search_audiobook(
     min_rating: Optional[float] = Query(None)
 ):
     start_ts = time.time()
-    client_ip = request.client.host if request.client else "Unknown"
+    device_id, country = await process_client_info(request)
 
     if not q and not author and not isbn:
         raise HTTPException(status_code=400, detail="Must provide 'q', 'author', or 'isbn'")
@@ -96,8 +173,8 @@ async def search_audiobook(
     
     if cached := await get_cache(cache_key):
         duration = (time.time() - start_ts) * 1000
-        await log_activity("search", cache_str, details="Cache Hit", ip=client_ip, duration_ms=duration)
-        return cached
+        await log_activity("search", cache_str, details="Cache Hit", device_id=device_id, country=country, duration_ms=duration)
+        return [transform_to_abs_format(b) for b in cached]
 
     try:
         req_id = str(uuid.uuid4())
@@ -115,12 +192,8 @@ async def search_audiobook(
             use_goodreads = active_providers.get("goodreads", True)
             use_prh = active_providers.get("prh", True)
 
-        # --- TASK DEFINITIONS ---
-        
-        # AUDIBLE (Sync Library -> Runs in Thread)
         if use_audible:
             async def run_audible():
-                # Offload the blocking audible.search_raw to a thread
                 raw = await asyncio.to_thread(audible.search_raw, query=q, author=author, isbn=isbn, limit=limit)
                 if raw:
                     sub = [compiler.compile_audible_metadata(p['asin'], p) for p in raw]
@@ -128,22 +201,17 @@ async def search_audiobook(
                 return []
             tasks.append(benchmark_call(req_id, "Audible", run_audible))
 
-        # ITUNES (Async -> Runs on Event Loop)
         if use_itunes:
             tasks.append(benchmark_call(req_id, "iTunes", itunes.search_raw, query=q, author=author, isbn=isbn, limit=limit))
 
-        # GOODREADS (Async -> Runs on Event Loop)
         if use_goodreads:
             search_term = isbn if isbn else (f"{q} {author}" if q and author else (q or author))
             tasks.append(benchmark_call(req_id, "Goodreads", goodreads.search_scraper, search_term))
 
-        # PRH (Async -> Runs on Event Loop)
         if use_prh:
             search_term = isbn if isbn else (q or author)
             tasks.append(benchmark_call(req_id, "PRH", prh.search_raw, search_term, limit=limit))
         
-        # --- PARALLEL EXECUTION ---
-        # asyncio.gather runs all tasks (Threaded and Async) simultaneously
         results_list = await asyncio.gather(*tasks)
         
         full_results = []
@@ -157,8 +225,8 @@ async def search_audiobook(
                 r = book.get("rating")
                 if r is None or r < min_rating: continue
             if book['asin'] in seen_ids: continue
-            
             seen_ids.add(book['asin'])
+            
             book = _init_stats(book)
             filtered_results.append(book)
 
@@ -171,8 +239,10 @@ async def search_audiobook(
         await set_cache(cache_key, filtered_results)
         
         duration = (time.time() - start_ts) * 1000
-        await log_activity("search", cache_str, details="Multi-Provider Query", ip=client_ip, duration_ms=duration)
-        return filtered_results
+        await log_activity("search", cache_str, details="Multi-Provider Query", device_id=device_id, country=country, duration_ms=duration)
+        
+        # Return ABS format
+        return [transform_to_abs_format(b) for b in filtered_results]
 
     except Exception as e:
         print(f"❌ Global Search Error: {e}")
@@ -182,7 +252,7 @@ async def search_audiobook(
 @router.get("/book/{asin}")
 async def get_book_details(asin: str, request: Request):
     start_ts = time.time()
-    client_ip = request.client.host if request.client else "Unknown"
+    device_id, country = await process_client_info(request)
     cache_key = f"book_v7:{asin}"
     
     def get_dur(): return (time.time() - start_ts) * 1000
@@ -193,14 +263,14 @@ async def get_book_details(asin: str, request: Request):
         cached["last_accessed"] = datetime.datetime.utcnow().isoformat()
         await set_cache(cache_key, cached)
         cached["custom_metadata"] = await get_custom_fields(asin) or {}
-        await log_activity("fetch_metadata", asin, details="Redis Hit", ip=client_ip, duration_ms=get_dur())
+        await log_activity("fetch_metadata", asin, details="Redis Hit", device_id=device_id, country=country, duration_ms=get_dur())
         return cached
 
     # 2. DB Check
     if stored := await get_book_from_db(asin):
         await set_cache(cache_key, stored)
         stored["custom_metadata"] = await get_custom_fields(asin) or {}
-        await log_activity("fetch_metadata", asin, details="Mongo Hit", ip=client_ip, duration_ms=get_dur())
+        await log_activity("fetch_metadata", asin, details="Mongo Hit", device_id=device_id, country=country, duration_ms=get_dur())
         return stored
 
     async def finalize(data, source):
@@ -208,12 +278,10 @@ async def get_book_details(asin: str, request: Request):
         data["custom_metadata"] = await get_custom_fields(asin) or {}
         await upsert_book_to_db(data)
         await set_cache(cache_key, data)
-        await log_activity("fetch_metadata", asin, details=source, ip=client_ip, duration_ms=get_dur())
+        await log_activity("fetch_metadata", asin, details=source, device_id=device_id, country=country, duration_ms=get_dur())
         return data
 
-    # 3. Provider Fetching
     try:
-        # Thread the blocking Audible call
         raw = await asyncio.to_thread(audible.get_product_raw, asin)
         data = await compiler.compile_audible_metadata(asin, raw)
         return await finalize(data, "Audible")
@@ -226,84 +294,62 @@ async def get_book_details(asin: str, request: Request):
         if data := await prh.fetch_details(asin):
             return await finalize(data, "PRH")
 
-    await log_activity("fetch_error", asin, details="Not found", ip=client_ip, duration_ms=get_dur())
+    await log_activity("fetch_error", asin, details="Not found", device_id=device_id, country=country, duration_ms=get_dur())
     raise HTTPException(status_code=404, detail="Book not found")
 
 # --- 3. LIST IMPORT ENDPOINT ---
 @router.post("/lists/import")
 async def import_audible_list(data: ImportListRequest, request: Request):
+    start_ts = time.time()
+    device_id, country = await process_client_info(request)
     url = data.url
     req_id = str(uuid.uuid4())
-    client_ip = request.client.host if request.client else "Unknown"
-    start_ts = time.time()
-
-    # 1. FETCH SETTINGS (For Goodreads Limit)
+    
     config = await get_system_settings()
     max_pages = config.get("scrape_limit_pages", 100)
 
-    # --- BRANCH A: GOODREADS IMPORT ---
+    # --- A: GOODREADS ---
     if "goodreads.com" in url:
         try:
-            # Scrape List (Returns full book objects, not just IDs)
-            # We pass 'max_pages' to control how deep we scrape
             list_title, books = await benchmark_call(
-                req_id, 
-                "Goodreads Scraper", 
-                goodreads.scrape_list_from_url, 
-                url, 
-                max_pages=max_pages 
+                req_id, "Goodreads Scraper", goodreads.scrape_list_from_url, url, max_pages=max_pages
             )
-
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Goodreads scrape failed: {str(e)}")
 
-        if not books:
-            raise HTTPException(status_code=400, detail="No books found.")
+        if not books: raise HTTPException(status_code=400, detail="No books found.")
 
-        # Save Books to Library & Cache
-        # Goodreads scraper already returns full metadata, so we just save it.
         for book in books:
-            book = _init_stats(book) # Add 'added_at', 'access_count'
+            book = _init_stats(book)
             await upsert_book_to_db(book)
             await set_cache(f"book_v7:{book['asin']}", book)
 
-        # Save List Collection
         asins = [b['asin'] for b in books]
         await save_imported_list(list_title, url, asins, source="Goodreads")
         
         duration = (time.time() - start_ts) * 1000
-        await log_activity("import_list", list_title, details=f"GR: {len(books)} items", ip=client_ip, duration_ms=duration)
-        
+        await log_activity("import_list", list_title, details=f"GR: {len(books)} items", device_id=device_id, country=country, duration_ms=duration)
         return {"status": "success", "title": list_title, "count": len(books)}
 
-    # --- BRANCH B: AUDIBLE IMPORT ---
+    # --- B: AUDIBLE ---
     else:
         try:
-            # Scrape ASINs only
             list_title, asins = await benchmark_call(
-                req_id, 
-                "Audible Scraper", 
-                audible.scrape_list_from_url, 
-                url
+                req_id, "Audible Scraper", asyncio.to_thread, audible.scrape_list_from_url, url
             )
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Scrape failed: {str(e)}")
         
-        if not asins: 
-            raise HTTPException(status_code=400, detail="No ASINs found at that URL.")
+        if not asins: raise HTTPException(status_code=400, detail="No ASINs found.")
         
         successful_books = []
 
-        # Helper to fetch individual book metadata via API
         async def fetch_and_persist_book(asin):
             cache_key = f"book_v7:{asin}"
-            
-            # Skip if we already have it
             if await get_cache(cache_key): return True
             if await get_book_from_db(asin): return True
 
             try:
-                # Thread the blocking API call
                 async def _get_data():
                     raw = await asyncio.to_thread(audible.get_product_raw, asin)
                     return await compiler.compile_audible_metadata(asin, raw)
@@ -315,42 +361,30 @@ async def import_audible_list(data: ImportListRequest, request: Request):
                     await set_cache(cache_key, meta)
                     return True
             except:
-                # Log failure but don't stop the whole import
                 await log_provider_stats(req_id, "Audible", 0, 0, "error")
-            
             return False
 
-        # Process in chunks to be polite to the API
         chunk_size = 10
         for i in range(0, len(asins), chunk_size):
             chunk = asins[i:i + chunk_size]
             tasks = [fetch_and_persist_book(asin) for asin in chunk]
             results = await asyncio.gather(*tasks)
-            
-            # Count successes
             for res in results:
                 if res: successful_books.append(1)
-                
             await asyncio.sleep(0.2)
 
-        # Save List Collection
         await save_imported_list(list_title, url, asins, source="Audible")
         
         duration = (time.time() - start_ts) * 1000
-        await log_activity("import_list", list_title, details=f"Items: {len(successful_books)}/{len(asins)}", ip=client_ip, duration_ms=duration)
+        await log_activity("import_list", list_title, details=f"Items: {len(successful_books)}/{len(asins)}", device_id=device_id, country=country, duration_ms=duration)
         
-        return {
-            "status": "success", 
-            "title": list_title, 
-            "count": len(asins),
-            "imported": len(successful_books)
-        }
+        return {"status": "success", "title": list_title, "count": len(asins), "imported": len(successful_books)}
 
 # --- 4. CREATE MANUAL LIST ---
 @router.post("/lists/create")
 async def create_manual_list(data: CreateListRequest, request: Request):
     start_ts = time.time()
-    client_ip = request.client.host if request.client else "Unknown"
+    device_id, country = await process_client_info(request)
     req_id = str(uuid.uuid4())
     
     clean_asins = list(set([a.strip() for a in data.asins if a and a.strip()]))
@@ -387,7 +421,7 @@ async def create_manual_list(data: CreateListRequest, request: Request):
         await asyncio.sleep(0.1)
 
     duration = (time.time() - start_ts) * 1000
-    await log_activity("create_list", data.name, details=f"Items: {successful_count}", ip=client_ip, duration_ms=duration)
+    await log_activity("create_list", data.name, details=f"Items: {successful_count}", device_id=device_id, country=country, duration_ms=duration)
     return {"status": "success", "name": data.name, "count": len(clean_asins)}
 
 # --- 5. CUSTOM FIELDS ---

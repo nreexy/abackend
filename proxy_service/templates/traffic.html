@@ -126,7 +126,7 @@
                     <thead class="table-light">
                         <tr>
                             <th>Time (UTC)</th>
-                            <th>Device IP</th>
+                            <th>Device ID</th>
                             <th>Action</th>
                             <th>Duration</th>
                             <th>Target (ASIN/Query)</th>
@@ -140,8 +140,8 @@
                                 {{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}
                             </td>
                             <td>
-                                <span class="badge bg-light text-dark border">
-                                    <i class="bi bi-pc-display me-1"></i> {{ log.ip or 'Unknown' }}
+                                <span class="badge bg-light text-dark border font-monospace">
+                                    <i class="bi bi-fingerprint me-1"></i> {{ log.device_id or log.ip or 'Unknown' }}
                                 </span>
                             </td>
                             <td>
