@@ -38,7 +38,7 @@ This server sits between your mobile app/media server and external data sources.
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/yourusername/abackend.git
+git clone https://github.com/nreexy/abackend.git
 cd abackend
 ```
 
