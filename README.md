@@ -38,8 +38,8 @@ This server sits between your mobile app/media server and external data sources.
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/yourusername/audio-metadata-proxy.git
-cd audio-metadata-proxy
+git clone https://github.com/nreexy/abackend.git
+cd abackend
 ```
 
 ### 2. Generate Audible Credentials (Important)
