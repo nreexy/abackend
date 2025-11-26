@@ -163,25 +163,40 @@ async def view_settings(request: Request):
 @router.post("/settings/update")
 async def update_settings(
     request: Request,
-    limit: int = Form(...),       # Existing (Search Results per provider)
-    scrape_limit: int = Form(...), # <--- NEW (Pages to scrape)
+    limit: int = Form(5),
+    scrape_limit: int = Form(100),
     prov_audible: bool = Form(False),
     prov_itunes: bool = Form(False),
     prov_goodreads: bool = Form(False),
-    prov_prh: bool = Form(False)
+    prov_prh: bool = Form(False),
+    prov_google: bool = Form(False),
+    google_books_api_key: str = Form(None),
+    preserve_settings: bool = Form(False)
 ):
     if not await check_ui_auth(request): return RedirectResponse("/login")
-    
-    providers = {
-        "audible": prov_audible,
-        "itunes": prov_itunes,
-        "goodreads": prov_goodreads,
-        "prh": prov_prh
-    }
-    
-    # Pass both limits to the database function
-    await save_system_settings(providers, limit, scrape_limit)
-    
+
+    # If this is just saving the key, we need to fetch existing settings to preserve them
+    if preserve_settings:
+        current_config = await get_system_settings()
+        providers = current_config.get("providers", {})
+        search_limit = current_config.get("search_limit", 5)
+        scrape_limit_pages = current_config.get("scrape_limit_pages", 100)
+        
+        # Only update the key
+        await save_system_settings(providers, search_limit, scrape_limit_pages, google_books_api_key)
+        
+    else:
+        # Main settings form update
+        providers = {
+            "audible": prov_audible,
+            "itunes": prov_itunes,
+            "goodreads": prov_goodreads,
+            "prh": prov_prh,
+            "google": prov_google
+        }
+        # Don't overwrite key with None if not in this form
+        await save_system_settings(providers, limit, scrape_limit, google_books_api_key=None)
+
     return RedirectResponse(url="/settings?saved=true", status_code=303)
 
 @router.post("/settings/flush")

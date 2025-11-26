@@ -2,10 +2,10 @@ import asyncio
 import uuid
 import time
 import datetime
-from typing import Optional, List
+from typing import Optional, List, Union
 import httpx
 
-from fastapi import APIRouter, HTTPException, Query, Depends, Request
+from fastapi import APIRouter, HTTPException, Query, Depends, Request, BackgroundTasks
 from pydantic import BaseModel
 
 # --- IMPORTS ---
@@ -21,9 +21,11 @@ from app.database import (
     create_custom_list,
     upsert_book_to_db, 
     get_book_from_db,
+    get_all_lists,
+    get_list_by_id,
     redis_client 
 )
-from app.services import audible, itunes, goodreads, compiler, prh
+from app.services import audible, itunes, goodreads, compiler, prh, google_books
 from app.auth import get_current_user
 from app.utils import get_device_hash
 
@@ -41,6 +43,29 @@ class ImportListRequest(BaseModel):
 class CreateListRequest(BaseModel):
     name: str
     asins: List[str]
+
+class ImportedListResponse(BaseModel):
+    name: str
+    id: str
+    count: int
+    source: str
+    imported_at: str
+
+class ListItemDefault(BaseModel):
+    asin: str
+    title: str
+    authors: List[str]
+
+class ListItemEnhanced(ListItemDefault):
+    genres: List[str] = []
+    cover_image: Optional[str] = None
+    rating: Optional[float] = None
+
+class ListItemsResponse(BaseModel):
+    items: List[Union[ListItemEnhanced, ListItemDefault]]
+    total_count: int
+    page: int
+    total_pages: int
 
 # --- HELPERS ---
 
@@ -231,6 +256,14 @@ async def search_audiobook(
         if use_prh:
             search_term = isbn if isbn else (q or author)
             tasks.append(benchmark_call(req_id, "PRH", prh.search_raw, search_term, limit=limit))
+
+        if use_google:
+            search_term = isbn if isbn else (f"{q} {author}" if q and author else (q or author))
+            api_key = config.get("google_books_api_key")
+            if api_key:
+                tasks.append(benchmark_call(req_id, "Google Books", google_books.search_book, search_term, api_key, limit=limit))
+            else:
+                print("⚠️ Google Books enabled but no API Key found.")
         
         results_list = await asyncio.gather(*tasks)
         
@@ -318,13 +351,12 @@ async def get_book_details(asin: str, request: Request):
     raise HTTPException(status_code=404, detail="Book not found")
 
 # --- 3. LIST IMPORT ENDPOINT ---
-@router.post("/lists/import")
-async def import_audible_list(data: ImportListRequest, request: Request):
+# --- REFACTORED IMPORT LOGIC ---
+async def execute_list_import(url: str, device_id: str, country: str, req_id: str):
+    """
+    Core logic for importing a list. Can be run synchronously or in background.
+    """
     start_ts = time.time()
-    device_id, country = await process_client_info(request)
-    url = data.url
-    req_id = str(uuid.uuid4())
-    
     config = await get_system_settings()
     max_pages = config.get("scrape_limit_pages", 100)
 
@@ -335,9 +367,13 @@ async def import_audible_list(data: ImportListRequest, request: Request):
                 req_id, "Goodreads Scraper", goodreads.scrape_list_from_url, url, max_pages=max_pages
             )
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Goodreads scrape failed: {str(e)}")
+            print(f"❌ Goodreads Import Error: {e}")
+            # If running in background, we can't raise HTTPException to user.
+            # But for sync calls, we might want to propagate.
+            # For now, we'll re-raise if it's a critical logic error, or just log.
+            raise e
 
-        if not books: raise HTTPException(status_code=400, detail="No books found.")
+        if not books: raise Exception("No books found.")
 
         for book in books:
             book = _init_stats(book)
@@ -358,9 +394,10 @@ async def import_audible_list(data: ImportListRequest, request: Request):
                 req_id, "Audible Scraper", asyncio.to_thread, audible.scrape_list_from_url, url
             )
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Scrape failed: {str(e)}")
+            print(f"❌ Audible Import Error: {e}")
+            raise e
         
-        if not asins: raise HTTPException(status_code=400, detail="No ASINs found.")
+        if not asins: raise Exception("No ASINs found.")
         
         successful_books = []
 
@@ -399,6 +436,147 @@ async def import_audible_list(data: ImportListRequest, request: Request):
         await log_activity("import_list", list_title, details=f"Items: {len(successful_books)}/{len(asins)}", device_id=device_id, country=country, duration_ms=duration)
         
         return {"status": "success", "title": list_title, "count": len(asins), "imported": len(successful_books)}
+
+# --- 3. LIST IMPORT ENDPOINT (SYNC) ---
+@router.post("/lists/import")
+async def import_audible_list(data: ImportListRequest, request: Request):
+    device_id, country = await process_client_info(request)
+    req_id = str(uuid.uuid4())
+    
+    try:
+        return await execute_list_import(data.url, device_id, country, req_id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Import failed: {str(e)}")
+
+# --- 3b. LIST IMPORT ENDPOINT (ASYNC) ---
+@router.post("/lists/import/async")
+async def import_audible_list_async(data: ImportListRequest, request: Request, background_tasks: BackgroundTasks):
+    """
+    Starts the import process in the background.
+    Returns immediately if the URL looks valid.
+    """
+    # 1. Basic Validation
+    if "audible.com" not in data.url and "goodreads.com" not in data.url:
+         raise HTTPException(status_code=400, detail="Unsupported URL. Must be Audible or Goodreads.")
+
+    # 2. Prepare Context
+    device_id, country = await process_client_info(request)
+    req_id = str(uuid.uuid4())
+
+    # 3. Wrapper to handle background exceptions safely
+    async def safe_import_task(url, dev_id, ctry, rid):
+        try:
+            await execute_list_import(url, dev_id, ctry, rid)
+        except Exception as e:
+            print(f"❌ Background Import Failed for {url}: {e}")
+            await log_activity("import_error", url, details=str(e), device_id=dev_id, country=ctry)
+
+    # 4. Enqueue Task
+    background_tasks.add_task(safe_import_task, data.url, device_id, country, req_id)
+
+    return {"status": "accepted", "message": "Import started in background", "request_id": req_id}
+
+@router.get("/lists/imported", response_model=List[ImportedListResponse])
+async def get_imported_lists(request: Request):
+    """
+    Returns a list of all imported lists (excluding custom lists).
+    """
+    # 1. Fetch all lists
+    all_lists = await get_all_lists()
+    
+    # 2. Filter and Format
+    response = []
+    for lst in all_lists:
+        # Filter: Only include 'imported' type
+        if lst.get("type") != "imported":
+            continue
+            
+        # Format Date
+        created_at = lst.get("created_at")
+        if isinstance(created_at, datetime.datetime):
+            date_str = created_at.strftime("%Y-%m-%d")
+        else:
+            date_str = str(created_at)[:10]
+
+        response.append(ImportedListResponse(
+            name=lst.get("name", "Unknown List"),
+            id=str(lst.get("_id")),
+            count=lst.get("count", 0),
+            source=lst.get("source", "Unknown"),
+            imported_at=date_str
+        ))
+        
+    return response
+
+@router.get("/lists/{list_id}/items", response_model=ListItemsResponse)
+async def get_list_items(
+    list_id: str, 
+    request: Request,
+    page: int = Query(1, ge=1),
+    limit: int = Query(100, ge=1, le=100),
+    enhanced: bool = Query(False)
+):
+    """
+    Retrieve items from a specific list with pagination and detail levels.
+    """
+    # 1. Fetch List
+    list_obj = await get_list_by_id(list_id)
+    if not list_obj:
+        raise HTTPException(status_code=404, detail="List not found")
+        
+    all_asins = list_obj.get("asins", [])
+    total_count = len(all_asins)
+    total_pages = (total_count + limit - 1) // limit if limit > 0 else 1
+    
+    # 2. Pagination
+    start = (page - 1) * limit
+    end = start + limit
+    page_asins = all_asins[start:end]
+    
+    # 3. Fetch Metadata
+    items = []
+    req_id = str(uuid.uuid4()) # For internal logging if needed
+    
+    async def fetch_item(asin):
+        # Try Cache/DB first
+        cache_key = f"book_v7:{asin}"
+        if cached := await get_cache(cache_key): return cached
+        if stored := await get_book_from_db(asin): 
+             await set_cache(cache_key, stored)
+             return stored
+             
+        # If not found, try to fetch live (optional, might be slow for lists)
+        # For now, we'll just return basic info if missing
+        return {"asin": asin, "title": "Unknown Title", "authors": []}
+
+    # Fetch in parallel
+    tasks = [fetch_item(asin) for asin in page_asins]
+    results = await asyncio.gather(*tasks)
+    
+    # 4. Map to Model
+    for data in results:
+        base_info = {
+            "asin": data.get("asin", "Unknown"),
+            "title": data.get("title", "Unknown"),
+            "authors": data.get("authors", [])
+        }
+        
+        if enhanced:
+            items.append(ListItemEnhanced(
+                **base_info,
+                genres=data.get("genres", []),
+                cover_image=data.get("cover_image"),
+                rating=data.get("rating")
+            ))
+        else:
+            items.append(ListItemDefault(**base_info))
+            
+    return ListItemsResponse(
+        items=items,
+        total_count=total_count,
+        page=page,
+        total_pages=total_pages
+    )
 
 # --- 4. CREATE MANUAL LIST ---
 @router.post("/lists/create")

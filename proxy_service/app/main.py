@@ -75,8 +75,8 @@ async def startup_db_client():
     await init_db_indexes()
     print(f"📝 System Logging fully initialized to {LOG_FILE}")
 
-app.include_router(ui.router)
 app.include_router(api.router)
+app.include_router(ui.router)
 
 @app.get("/")
 async def health_check():

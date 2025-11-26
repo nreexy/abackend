@@ -92,7 +92,8 @@
                                 <td><code>providers</code></td>
                                 <td>String</td>
                                 <td>Comma-separated list to override default settings (e.g.,
-                                    <code>Audible,iTunes</code>).</td>
+                                    <code>Audible,iTunes</code>).
+                                </td>
                             </tr>
                         </tbody>
                     </table>
@@ -164,6 +165,143 @@
                 </div>
             </div>
 
+            <!-- ASYNC IMPORT LIST -->
+            <div class="card shadow-sm border-0 mb-4" id="import-async">
+                <div class="card-header bg-white py-3">
+                    <span class="badge bg-success method-badge me-2">POST</span>
+                    <strong class="font-monospace fs-5">/lists/import/async</strong>
+                </div>
+                <div class="card-body">
+                    <p>Starts a list import in the background. Returns immediately with a request ID. Use this for large
+                        lists to avoid timeouts.</p>
+
+                    <h6>Request Body Parameters</h6>
+                    <table class="table table-bordered table-sm param-table">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Name</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>url</code></td>
+                                <td>String</td>
+                                <td>The public URL of the list (Audible or Goodreads).</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h6>Request Body (JSON)</h6>
+                    <pre>{
+  "url": "https://www.audible.com/charts/best"
+}</pre>
+                    <h6>Response</h6>
+                    <pre>{
+  "status": "accepted",
+  "message": "Import started in background",
+  "request_id": "uuid-..."
+}</pre>
+                </div>
+            </div>
+
+            <!-- GET IMPORTED LISTS -->
+            <div class="card shadow-sm border-0 mb-4" id="get-imported">
+                <div class="card-header bg-white py-3">
+                    <span class="badge bg-primary method-badge me-2">GET</span>
+                    <strong class="font-monospace fs-5">/lists/imported</strong>
+                </div>
+                <div class="card-body">
+                    <p>Retrieve a list of all imported lists (excluding custom user lists).</p>
+
+                    <h6>Response Format</h6>
+                    <pre>[
+  {
+    "name": "Audible Best Sellers",
+    "id": "507f1f77bcf86cd799439011",
+    "count": 20,
+    "source": "Audible",
+    "imported_at": "2023-11-25"
+  }
+]</pre>
+                </div>
+            </div>
+
+            <!-- GET LIST ITEMS -->
+            <div class="card shadow-sm border-0 mb-4" id="get-list-items">
+                <div class="card-header bg-white py-3">
+                    <span class="badge bg-primary method-badge me-2">GET</span>
+                    <strong class="font-monospace fs-5">/lists/{id}/items</strong>
+                </div>
+                <div class="card-body">
+                    <p>Retrieve items from a specific list with pagination and selectable detail levels.</p>
+
+                    <h6>Path Parameters</h6>
+                    <table class="table table-bordered table-sm param-table">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Name</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>id</code></td>
+                                <td>String</td>
+                                <td>The unique ID of the list.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h6>Query Parameters</h6>
+                    <table class="table table-bordered table-sm param-table">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Name</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>page</code></td>
+                                <td>Integer</td>
+                                <td>Page number (default: 1).</td>
+                            </tr>
+                            <tr>
+                                <td><code>limit</code></td>
+                                <td>Integer</td>
+                                <td>Items per page (default: 100, max: 100).</td>
+                            </tr>
+                            <tr>
+                                <td><code>enhanced</code></td>
+                                <td>Boolean</td>
+                                <td>If true, returns enhanced details (cover, rating, genres). Default: false.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h6>Response Format</h6>
+                    <pre>{
+  "items": [
+    {
+      "asin": "B082BGDBHB",
+      "title": "The Martian",
+      "authors": ["Andy Weir"],
+      "genres": ["Sci-Fi"],       // Only in enhanced
+      "cover_image": "http...",   // Only in enhanced
+      "rating": 4.8               // Only in enhanced
+    }
+  ],
+  "total_count": 50,
+  "page": 1,
+  "total_pages": 1
+}</pre>
+                </div>
+            </div>
+
             <!-- CREATE LIST -->
             <div class="card shadow-sm border-0 mb-4" id="create">
                 <div class="card-header bg-white py-3">
@@ -215,7 +353,10 @@
                         <a href="#auth" class="list-group-item list-group-item-action">Authentication</a>
                         <a href="#search" class="list-group-item list-group-item-action">Search</a>
                         <a href="#details" class="list-group-item list-group-item-action">Get Book Details</a>
-                        <a href="#import" class="list-group-item list-group-item-action">Import List</a>
+                        <a href="#import" class="list-group-item list-group-item-action">Import List (Sync)</a>
+                        <a href="#import-async" class="list-group-item list-group-item-action">Import List (Async)</a>
+                        <a href="#get-imported" class="list-group-item list-group-item-action">Get Imported Lists</a>
+                        <a href="#get-list-items" class="list-group-item list-group-item-action">Get List Items</a>
                         <a href="#create" class="list-group-item list-group-item-action">Create List</a>
                         <a href="#custom" class="list-group-item list-group-item-action">Custom Fields</a>
                     </div>

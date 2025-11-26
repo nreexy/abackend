@@ -154,19 +154,31 @@ async def flush_all_cache():
 # --- SETTINGS ---
 
 DEFAULT_SETTINGS = {
-    "providers": {"audible": True, "itunes": True, "goodreads": True, "prh": True},
+    "providers": {"audible": True, "itunes": True, "goodreads": True, "prh": True, "google": False},
     "search_limit": 5, 
-    "scrape_limit_pages": 100
+    "scrape_limit_pages": 100,
+    "google_books_api_key": ""
 }
 
 async def get_system_settings():
     config = await settings_collection.find_one({"_id": "global_config"})
     return config if config else DEFAULT_SETTINGS
 
-async def save_system_settings(providers: dict, search_limit: int, scrape_limit_pages: int):
+async def save_system_settings(providers: dict, search_limit: int, scrape_limit_pages: int, google_books_api_key: str = None):
+    update_fields = {
+        "providers": providers, 
+        "search_limit": search_limit, 
+        "scrape_limit_pages": scrape_limit_pages
+    }
+    
+    # Only update API key if provided (or explicitly cleared if passed as empty string, 
+    # but usually we want to preserve it if not passed in main form)
+    if google_books_api_key is not None:
+        update_fields["google_books_api_key"] = google_books_api_key
+
     await settings_collection.update_one(
         {"_id": "global_config"},
-        {"$set": {"providers": providers, "search_limit": search_limit, "scrape_limit_pages": scrape_limit_pages}},
+        {"$set": update_fields},
         upsert=True
     )
 

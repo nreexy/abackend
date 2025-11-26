@@ -54,6 +54,27 @@
         </div>
     </div>
 
+    <!-- GOOGLE BOOKS API KEY CARD -->
+    <div class="card shadow-sm border-0 mb-4 border-start border-4 border-success">
+        <div class="card-body">
+            <h5 class="card-title mb-1"><i class="bi bi-google"></i> Google Books API Key</h5>
+            <p class="text-muted small mb-3">
+                Required for fetching metadata from Google Books.
+            </p>
+            <form action="/settings/update" method="post">
+                <!-- Hidden fields to preserve other settings -->
+                <input type="hidden" name="preserve_settings" value="true">
+
+                <div class="input-group">
+                    <span class="input-group-text bg-light"><i class="bi bi-key"></i></span>
+                    <input type="password" class="form-control" name="google_books_api_key"
+                        value="{{ config.google_books_api_key or '' }}" placeholder="Enter API Key">
+                    <button class="btn btn-primary" type="submit">Save Key</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- EXISTING ROW (Configuration & Danger Zone) -->
     <div class="row">
 
@@ -121,6 +142,15 @@
                                 <span class="badge" style="background-color: #FF6600; color: white;">Penguin Random
                                     House</span>
                                 <span class="text-muted ms-2">(Official Publisher Metadata)</span>
+                            </label>
+                        </div>
+
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="prov_google" name="prov_google"
+                                value="true" {% if config.providers.google %}checked{% endif %}>
+                            <label class="form-check-label" for="prov_google">
+                                <span class="badge bg-primary border">Google Books</span>
+                                <span class="text-muted ms-2">(Extensive Library, Series Info)</span>
                             </label>
                         </div>
 
