@@ -2,13 +2,13 @@
 
 A high-performance, self-hosted **metadata aggregator API** and **dashboard** for audiobook collectors and developers.
 
-This server sits between your mobile app/media server and external data sources. It aggregates, normalizes, and caches metadata from **Audible, iTunes, Goodreads, and Penguin Random House** into a single, unified JSON format.
+This server sits between your mobile app/media server and external data sources. It aggregates, normalizes, and caches metadata from **Audible, iTunes, Goodreads, Google Books, and Penguin Random House** into a single, unified JSON format.
 
 ![Library View](screenshots/Library.png)
 
 ## ✨ Features
 
-*   **Multi-Provider Search:** Parallel querying of Audible, iTunes, Goodreads, and PRH with results merging.
+*   **Multi-Provider Search:** Parallel querying of Audible, iTunes, Goodreads, Google Books and PRH with results merging.
 *   **Smart Caching:**
     *   **Redis:** Hot cache for millisecond-response times.
     *   **MongoDB:** Persistent library storage (scales to 100k+ books).
@@ -138,6 +138,7 @@ graph TD
         Proxy -->|Async| iTunes["iTunes API"]
         Proxy -->|Async| Goodreads["Goodreads Scraper"]
         Proxy -->|Async| PRH["Penguin Random House API"]
+        Proxy -->|Async| GoogleBooks["Google Books API"]
     end
     
     Audible -->|Chapters| Audnexus["Audnexus Engine"]
@@ -151,6 +152,7 @@ graph TD
 | **iTunes** | 🟢 Active | High-Res Covers, Release Dates | Public API, no auth needed |
 | **Goodreads** | 🟢 Active | User Ratings, Genres, Lists | Web scraping (Rate limited) |
 | **PRH** | 🟢 Active | Official Descriptions, ISBNs | Requires API Key |
+| **Google Books** | 🟢 Active | Official Descriptions, ISBNs | Requires API Key |
 
 ## 🤝 Contributing
 
