@@ -23,7 +23,9 @@ custom_fields_collection = db.custom_fields
 logs_collection = db.request_logs    # Activity Logs
 settings_collection = db.settings
 lists_collection = db.lists
+lists_collection = db.lists
 provider_stats_collection = db.provider_stats
+unified_catalog_collection = db.unified_catalog
 
 # Redis
 redis_client = redis.from_url(REDIS_URL, decode_responses=True)
@@ -114,6 +116,28 @@ async def delete_book_from_library(asin: str):
     await books_collection.delete_one({"asin": asin})
     await redis_client.delete(f"book_v7:{asin}")
 
+async def search_library_books(query: str, limit: int = 10):
+    """
+    Search for books in the local library by title or author.
+    """
+    if not query: return []
+    
+    # Case-insensitive regex search
+    regex = {"$regex": query, "$options": "i"}
+    
+    search_filter = {
+        "$or": [
+            {"title": regex},
+            {"authors": regex},
+            {"asin": regex}
+        ]
+    }
+    
+    cursor = books_collection.find(search_filter, {"_id": 0})
+    cursor.limit(limit)
+    
+    return await cursor.to_list(length=limit)
+
 # --- CACHE FUNCTIONS ---
 
 async def get_cache(key: str):
@@ -154,17 +178,19 @@ async def flush_all_cache():
 # --- SETTINGS ---
 
 DEFAULT_SETTINGS = {
-    "providers": {"audible": True, "itunes": True, "goodreads": True, "prh": True, "google": False},
+    "providers": {"audible": True, "itunes": True, "goodreads": True, "prh": True, "google": False, "hardcover": False},
     "search_limit": 5, 
     "scrape_limit_pages": 100,
-    "google_books_api_key": ""
+    "google_books_api_key": "",
+    "prh_api_key": "",
+    "hardcover_api_key": ""
 }
 
 async def get_system_settings():
     config = await settings_collection.find_one({"_id": "global_config"})
     return config if config else DEFAULT_SETTINGS
 
-async def save_system_settings(providers: dict, search_limit: int, scrape_limit_pages: int, google_books_api_key: str = None):
+async def save_system_settings(providers: dict, search_limit: int, scrape_limit_pages: int, google_books_api_key: str = None, prh_api_key: str = None, hardcover_api_key: str = None):
     update_fields = {
         "providers": providers, 
         "search_limit": search_limit, 
@@ -176,9 +202,28 @@ async def save_system_settings(providers: dict, search_limit: int, scrape_limit_
     if google_books_api_key is not None:
         update_fields["google_books_api_key"] = google_books_api_key
 
+    if prh_api_key is not None:
+        update_fields["prh_api_key"] = prh_api_key
+
+    if hardcover_api_key is not None:
+        update_fields["hardcover_api_key"] = hardcover_api_key
+
     await settings_collection.update_one(
         {"_id": "global_config"},
         {"$set": update_fields},
+        upsert=True
+    )
+
+async def get_stored_password_hash():
+    """Retrieves the admin password hash from the database."""
+    config = await settings_collection.find_one({"_id": "auth_config"})
+    return config.get("password_hash") if config else None
+
+async def set_stored_password_hash(hash_str: str):
+    """Saves the admin password hash to the database."""
+    await settings_collection.update_one(
+        {"_id": "auth_config"},
+        {"$set": {"password_hash": hash_str, "updated_at": datetime.datetime.utcnow()}},
         upsert=True
     )
 
@@ -227,6 +272,9 @@ async def log_provider_stats(request_id: str, provider: str, duration_ms: float,
         "request_id": request_id, "provider": provider,
         "duration_ms": duration_ms, "result_count": result_count, "status": status
     })
+
+async def get_system_logs(limit: int = 100):
+    return await logs_collection.find().sort("timestamp", -1).limit(limit).to_list(length=limit)
 
 async def get_traffic_stats():
     total_requests = await logs_collection.count_documents({})
@@ -340,3 +388,45 @@ async def delete_list_by_id(list_id: str):
         await lists_collection.delete_one({"_id": ObjectId(list_id)})
         return True
     except: return False
+
+# --- UNIFIED CATALOG ---
+
+async def get_unified_book(unified_id: str):
+    return await unified_catalog_collection.find_one({"_id": unified_id})
+
+async def find_unified_by_relation(provider: str, provider_id: str):
+    """
+    Finds a Unified Book that contains a specific provider ID relation.
+    """
+    return await unified_catalog_collection.find_one({
+        "relations": {"$elemMatch": {"provider": provider, "id": provider_id}}
+    })
+
+async def create_unified_book(title: str, authors: list, relations: list):
+    """
+    Creates a new Unified Book entry.
+    """
+    uid = str(uuid.uuid4())
+    now = datetime.datetime.utcnow()
+    doc = {
+        "_id": uid,
+        "title": title,
+        "authors": authors,
+        "relations": relations, # List of {provider, id}
+        "created_at": now,
+        "updated_at": now
+    }
+    await unified_catalog_collection.insert_one(doc)
+    return doc
+
+async def add_relation_to_unified_book(unified_id: str, provider: str, provider_id: str):
+    """
+    Adds a new provider link to an existing Unified Book.
+    """
+    await unified_catalog_collection.update_one(
+        {"_id": unified_id},
+        {
+            "$push": {"relations": {"provider": provider, "id": provider_id}},
+            "$set": {"updated_at": datetime.datetime.utcnow()}
+        }
+    )

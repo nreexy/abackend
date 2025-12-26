@@ -1,6 +1,7 @@
 fastapi
 uvicorn
 redis
+fuzzywuzzy[speedup]
 motor
 audible
 httpx

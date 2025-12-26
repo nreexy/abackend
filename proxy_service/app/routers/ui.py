@@ -5,27 +5,27 @@ from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 # Auth Logic
-from app.auth import verify_password, create_access_token, get_current_user, ADMIN_USERNAME, ADMIN_PASSWORD_HASH
-
-# Database Imports
+from app.auth import verify_password, create_access_token, get_current_user, ADMIN_USERNAME, get_active_password_hash, get_password_hash
 from app.database import (
+    set_stored_password_hash, 
     get_dashboard_stats, 
-    inspect_cache, 
-    delete_cache_key, 
-    get_library_page, 
-    delete_book_from_library,
     get_system_settings, 
     save_system_settings, 
-    flush_all_cache,
-    get_detailed_stats,
+    get_detailed_stats, 
+    inspect_cache, 
+    flush_all_cache, 
+    get_traffic_stats,
+    get_system_logs,
     get_all_lists,
     get_list_by_id,
+    delete_list_by_id,
+    get_library_page,
+    delete_book_from_library,
+    get_book_from_db,
     get_cache,
-    delete_list_by_id
+    set_cache
 )
-from app.utils import get_system_logs
 from app.limiter import limiter
-
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
@@ -38,20 +38,61 @@ async def check_ui_auth(request: Request):
     """
     try:
         await get_current_user(request)
-    except HTTPException:
+    except HTTPException as e:
+        # If system not initialized, we might want to redirect to setup
+        # But this function returns False -> redirects to /login
+        # We need to handle the "Not Initialized" case in the router calls or here.
+        # For now, let's just return False, and logic in /login will handle setup redirect.
         return False
     return True
+
+# --- SETUP ---
+@router.get("/setup", response_class=HTMLResponse)
+async def setup_page(request: Request):
+    if await get_active_password_hash():
+        return RedirectResponse(url="/login", status_code=303)
+    return templates.TemplateResponse("setup.html", {"request": request})
+
+@router.post("/setup")
+async def setup_action(
+    request: Request, 
+    password: str = Form(...), 
+    confirm_password: str = Form(...)
+):
+    if await get_active_password_hash():
+        return RedirectResponse(url="/login", status_code=303)
+
+    if password != confirm_password:
+        return templates.TemplateResponse("setup.html", {"request": request, "error": "Passwords do not match"})
+    
+    if len(password) < 8:
+        return templates.TemplateResponse("setup.html", {"request": request, "error": "Password must be at least 8 characters"})
+
+    # Hash and Save
+    pw_hash = get_password_hash(password)
+    await set_stored_password_hash(pw_hash)
+    
+    return RedirectResponse(url="/login?setup=success", status_code=303)
 
 # --- LOGIN / LOGOUT ---
 
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
+    # Check if setup needed
+    if not await get_active_password_hash():
+        return RedirectResponse(url="/setup", status_code=303)
+        
     return templates.TemplateResponse("login.html", {"request": request})
 
 @router.post("/login")
 @limiter.limit("5/minute")
 async def login(request: Request, response: Response, username: str = Form(...), password: str = Form(...)):
-    if username == ADMIN_USERNAME and verify_password(password, ADMIN_PASSWORD_HASH):
+    active_hash = await get_active_password_hash()
+    
+    if not active_hash:
+        return RedirectResponse(url="/setup", status_code=303)
+
+    if username == ADMIN_USERNAME and verify_password(password, active_hash):
         # Create Token
         access_token = create_access_token(data={"sub": username})
         # Set Cookie (HttpOnly)
@@ -171,6 +212,9 @@ async def update_settings(
     prov_prh: bool = Form(False),
     prov_google: bool = Form(False),
     google_books_api_key: str = Form(None),
+    prh_api_key: str = Form(None),
+    hardcover_api_key: str = Form(None),
+    prov_hardcover: bool = Form(False),
     preserve_settings: bool = Form(False)
 ):
     if not await check_ui_auth(request): return RedirectResponse("/login")
@@ -183,7 +227,7 @@ async def update_settings(
         scrape_limit_pages = current_config.get("scrape_limit_pages", 100)
         
         # Only update the key
-        await save_system_settings(providers, search_limit, scrape_limit_pages, google_books_api_key)
+        await save_system_settings(providers, search_limit, scrape_limit_pages, google_books_api_key, prh_api_key, hardcover_api_key)
         
     else:
         # Main settings form update
@@ -192,10 +236,11 @@ async def update_settings(
             "itunes": prov_itunes,
             "goodreads": prov_goodreads,
             "prh": prov_prh,
-            "google": prov_google
+            "google": prov_google,
+            "hardcover": prov_hardcover
         }
         # Don't overwrite key with None if not in this form
-        await save_system_settings(providers, limit, scrape_limit, google_books_api_key=None)
+        await save_system_settings(providers, limit, scrape_limit, google_books_api_key=None, prh_api_key=None, hardcover_api_key=None)
 
     return RedirectResponse(url="/settings?saved=true", status_code=303)
 
@@ -210,6 +255,48 @@ async def view_details(request: Request):
     if not await check_ui_auth(request): return RedirectResponse("/login")
     stats = await get_detailed_stats()
     return templates.TemplateResponse("details.html", {"request": request, "stats": stats, "active_page": "details"})
+
+@router.get("/detail_view")
+async def view_detail_page(request: Request, asin: Optional[str] = None):
+    if not await check_ui_auth(request): return RedirectResponse("/login")
+    
+    book = None
+    if asin:
+        # Try Cache then DB
+        cache_key = f"book_v7:{asin}"
+        book = await get_cache(cache_key)
+        if not book:
+            book = await get_book_from_db(asin)
+            if book:
+                # Cache it for next time
+                await set_cache(cache_key, book)
+                
+        if book:
+             # Format for UI (similar to library view)
+             book['authors_str'] = ", ".join(book.get("authors", []))
+             book['narrators_str'] = ", ".join(book.get("narrators", []))
+             book['genres_str'] = ", ".join(book.get("genres", []))
+             s = book.get("series", [])
+             book['series_str'] = f"{s[0].get('name')} #{s[0].get('sequence')}" if s else "-"
+    
+    # Serialize for template
+    import json
+    def json_serial(obj):
+        if isinstance(obj, (datetime.datetime, datetime.date)): return obj.isoformat()
+        raise TypeError(f"Type {type(obj)} not serializable")
+    
+    # Jinja's |tojson filter fails on datetime objects, so we pre-serialize the object used in debug view
+    # But wait, we want to pass the object to template as normal for access {{ book.title }}, 
+    # and ONLY serialize for the {{ book | tojson }} part? 
+    # Actually, converting the whole thing to a dict with strings is safer for both.
+    if book:
+        book = json.loads(json.dumps(book, default=json_serial))
+
+    return templates.TemplateResponse("detail_view.html", {
+        "request": request, 
+        "book": book,
+        "active_page": "detail_view"
+    })
 
 @router.get("/lists")
 async def view_lists(request: Request):
@@ -250,7 +337,7 @@ async def view_search_ui(request: Request):
 async def view_system_logs(request: Request):
     if not await check_ui_auth(request): return RedirectResponse("/login")
     
-    logs = get_system_logs(limit=500)
+    logs = await get_system_logs(limit=500)
     logs.reverse()
     
     return templates.TemplateResponse("logs.html", {

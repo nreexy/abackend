@@ -25,7 +25,7 @@ from app.database import (
     get_list_by_id,
     redis_client 
 )
-from app.services import audible, itunes, goodreads, compiler, prh, google_books
+from app.services import audible, itunes, goodreads, compiler, prh, google_books, hardcover, unifier
 from app.auth import get_current_user
 from app.utils import get_device_hash
 
@@ -193,6 +193,25 @@ async def ping():
     return {"success": True}
 
 # --- 1. SEARCH ENDPOINT ---
+@router.get("/library/search")
+async def search_local_library(q: str = Query(..., min_length=2)):
+    """
+    Search local library for autocomplete.
+    """
+    from app.database import search_library_books
+    results = await search_library_books(q, limit=10)
+    
+    # Simplify for autocomplete
+    simple = []
+    for b in results:
+        simple.append({
+            "asin": b.get("asin"),
+            "title": b.get("title"),
+            "author": ", ".join(b.get("authors", [])),
+            "cover": b.get("cover_image")
+        })
+    return simple
+
 @router.get("/search")
 async def search_audiobook(
     request: Request,
@@ -231,11 +250,15 @@ async def search_audiobook(
             use_itunes = "itunes" in target_list
             use_goodreads = "goodreads" in target_list
             use_prh = "prh" in target_list
+            use_google = "google" in target_list
+            use_hardcover = "hardcover" in target_list
         else:
             use_audible = active_providers.get("audible", True)
             use_itunes = active_providers.get("itunes", True)
             use_goodreads = active_providers.get("goodreads", True)
             use_prh = active_providers.get("prh", True)
+            use_google = active_providers.get("google", False)
+            use_hardcover = active_providers.get("hardcover", False)
 
         if use_audible:
             async def run_audible():
@@ -254,9 +277,21 @@ async def search_audiobook(
             tasks.append(benchmark_call(req_id, "Goodreads", goodreads.search_scraper, search_term))
 
         if use_prh:
-            search_term = isbn if isbn else (q or author)
-            tasks.append(benchmark_call(req_id, "PRH", prh.search_raw, search_term, limit=limit))
+                    if isbn:
+                        # FIX: If we have an ISBN, use fetch_details (direct lookup)
+                        # instead of search_raw (text search), which often fails for numbers.
+                        async def prh_isbn_lookup():
+                            # Ensure clean ISBN (PRH dislikes hyphens in URL path)
+                            clean_isbn = isbn.replace("-", "").strip()
+                            detail = await prh.fetch_details(clean_isbn)
+                            return [detail] if detail else []
 
+                        tasks.append(benchmark_call(req_id, "PRH", prh_isbn_lookup))
+                    else:
+                        # Standard text search
+                        search_term = q or author
+                        if search_term:
+                            tasks.append(benchmark_call(req_id, "PRH", prh.search_raw, search_term, limit=limit))
         if use_google:
             search_term = isbn if isbn else (f"{q} {author}" if q and author else (q or author))
             api_key = config.get("google_books_api_key")
@@ -265,6 +300,14 @@ async def search_audiobook(
             else:
                 print("⚠️ Google Books enabled but no API Key found.")
         
+        if use_hardcover:
+            search_term = q or author
+            api_key = config.get("hardcover_api_key")
+            if api_key:
+                tasks.append(benchmark_call(req_id, "Hardcover", hardcover.search_book, search_term, api_key, limit=limit))
+            else:
+                print("⚠️ Hardcover enabled but no API Key found.")
+
         results_list = await asyncio.gather(*tasks)
         
         full_results = []
@@ -295,11 +338,22 @@ async def search_audiobook(
         await log_activity("search", cache_str, details="Multi-Provider Query", device_id=device_id, country=country, duration_ms=duration)
         
         # Return ABS format
-        return [transform_to_abs_format(b) for b in filtered_results]
+        # UNIFIED PATH:
+        unified_results = await unifier.unify_search_results([filtered_results])
+        return [transform_to_abs_format(b) for b in unified_results]
 
     except Exception as e:
         print(f"❌ Global Search Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# --- 1b. PRH EXTENSIONS ---
+@router.get("/prh/also-purchased/{isbn}")
+async def get_prh_recommendations(isbn: str):
+    """
+    Get 'Also Purchased' recommendations from PRH.
+    """
+    results = await prh.get_recommendations(isbn) 
+    return results
 
 # --- 2. DETAILS ENDPOINT ---
 @router.get("/book/{asin}")

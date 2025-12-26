@@ -75,6 +75,8 @@
                                 <span class="badge bg-success">Goodreads</span>
                                 {% elif log.provider == 'PRH' %}
                                 <span class="badge" style="background-color: #FF6600; color: white;">PRH</span>
+                                {% elif log.provider == 'Google Books' %}
+                                <span class="badge bg-primary">Google Books</span>
                                 {% else %}
                                 {{ log.provider }}
                                 {% endif %}

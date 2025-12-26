@@ -57,6 +57,16 @@
                                     {% if config.providers.prh %}checked{% endif %}>
                                 <label class="form-check-label" for="prov_prh">PRH</label>
                             </div>
+                            <div class="form-check">
+                                <input class="form-check-input provider-chk" type="checkbox" value="Google"
+                                    id="prov_google" {% if config.providers.google %}checked{% endif %}>
+                                <label class="form-check-label" for="prov_google">Google</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input provider-chk" type="checkbox" value="Hardcover"
+                                    id="prov_hardcover" {% if config.providers.hardcover %}checked{% endif %}>
+                                <label class="form-check-label" for="prov_hardcover">Hardcover</label>
+                            </div>
                         </div>
                     </div>
 
@@ -168,13 +178,26 @@
             if (book.provider === 'iTunes') providerBadge = 'bg-info text-white';
             if (book.provider === 'Goodreads') providerBadge = 'bg-success';
             if (book.provider === 'Penguin Random House') providerBadge = 'bg-danger';
+            if (book.provider === 'Hardcover') providerBadge = 'bg-primary';
 
             const html = `
         <div class="col-md-6 col-lg-4 col-xl-3">
             <div class="card h-100 shadow-sm border-0">
                 <div class="position-relative">
                     <img src="${cover}" class="card-img-top" alt="Cover" style="height: 250px; object-fit: contain; background: #f8f9fa; padding: 10px;">
-                    <span class="position-absolute top-0 end-0 badge ${providerBadge} m-2 shadow-sm">${book.provider || 'Unknown'}</span>
+                    <div class="position-absolute top-0 end-0 m-2 d-flex flex-column gap-1 align-items-end">
+                        ${(book.available_providers || [book.provider]).map(prov => {
+                let badgeClass = 'bg-secondary';
+                if (prov === 'Audible') badgeClass = 'bg-warning text-dark';
+                else if (prov === 'iTunes') badgeClass = 'bg-pink-100 text-pink-800';
+                else if (prov === 'Goodreads') badgeClass = 'bg-success';
+                else if (prov === 'Penguin Random House' || prov === 'PRH') badgeClass = 'bg-danger';
+                else if (prov === 'Hardcover') badgeClass = 'bg-indigo-100 text-indigo-800';
+                else if (prov === 'Google Books') badgeClass = 'bg-blue-100 text-blue-800';
+
+                return `<span class="badge ${badgeClass} shadow-sm">${prov || 'Unknown'}</span>`;
+            }).join('')}
+                    </div>
                 </div>
                 <div class="card-body d-flex flex-column">
                     <h6 class="card-title fw-bold text-truncate" title="${book.title}">${book.title}</h6>

@@ -1,0 +1,299 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2>Detail View</h2>
+            <p class="text-muted">Search your cached library to view full metadata details.</p>
+        </div>
+    </div>
+
+    <!-- SEARCH BAR -->
+    <div class="row justify-content-center mb-5">
+        <div class="col-md-8 col-lg-6">
+            <div class="position-relative">
+                <div class="input-group input-group-lg shadow-sm">
+                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                    <input type="text" id="librarySearch" class="form-control border-start-0"
+                        placeholder="Search by Title or Author..." autocomplete="off">
+                </div>
+                <!-- Autocomplete Dropdown -->
+                <div id="searchResults" class="list-group position-absolute w-100 shadow"
+                    style="z-index: 1000; display: none; max-height: 400px; overflow-y: auto;">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- DETAIL VIEW -->
+    {% if book %}
+    <div class="row justify-content-center fade-in">
+        <div class="col-lg-10">
+            <div class="card shadow border-0">
+                <div class="card-body p-4">
+                    <div class="row">
+                        <!-- COVER IMAGE -->
+                        <div class="col-md-4 col-lg-3 text-center mb-4 mb-md-0">
+                            {% if book.cover_image %}
+                            <img src="{{ book.cover_image }}" class="img-fluid rounded shadow-sm"
+                                style="max-height: 400px; width: auto;" alt="Cover">
+                            {% else %}
+                            <div class="bg-light rounded d-flex align-items-center justify-content-center text-muted"
+                                style="height: 300px; width: 100%;">
+                                <i class="bi bi-book fs-1"></i>
+                            </div>
+                            {% endif %}
+
+                            <div class="mt-3">
+                                <span class="badge bg-light text-dark border">{{ book.provider }}</span>
+                                <div class="mt-2 text-muted small">ASIN: <code>{{ book.asin }}</code></div>
+                            </div>
+                        </div>
+
+                        <!-- METADATA -->
+                        <div class="col-md-8 col-lg-9">
+                            <h1 class="fw-bold mb-1">{{ book.title }}</h1>
+                            {% if book.subtitle %}
+                            <h5 class="text-muted fw-normal mb-3">{{ book.subtitle }}</h5>
+                            {% endif %}
+
+                            <div class="mb-3">
+                                <span class="text-warning fs-5">★</span>
+                                <span class="fw-bold fs-5">{{ book.rating or '-' }}</span>
+                                <span class="text-muted small">({{ book.rating_count or 0 }} ratings)</span>
+                            </div>
+
+                            <div class="row mb-3">
+                                <div class="col-sm-3 fw-bold text-muted">Author</div>
+                                <div class="col-sm-9">{{ book.authors_str }}</div>
+                            </div>
+
+                            <div class="row mb-3">
+                                <div class="col-sm-3 fw-bold text-muted">Narrator</div>
+                                <div class="col-sm-9">{{ book.narrators_str }}</div>
+                            </div>
+
+                            <div class="row mb-3">
+                                <div class="col-sm-3 fw-bold text-muted">Series</div>
+                                <div class="col-sm-9 text-primary">{{ book.series_str }}</div>
+                            </div>
+
+                            <div class="row mb-3">
+                                <div class="col-sm-3 fw-bold text-muted">Publisher</div>
+                                <div class="col-sm-9">{{ book.publisher or '-' }}</div>
+                            </div>
+
+                            <div class="row mb-3">
+                                <div class="col-sm-3 fw-bold text-muted">Release Date</div>
+                                <div class="col-sm-9">{{ book.published_date or '-' }}</div>
+                            </div>
+
+                            <div class="row mb-3">
+                                <div class="col-sm-3 fw-bold text-muted">Runtime</div>
+                                <div class="col-sm-9">
+                                    {% if book.runtime_minutes %}
+                                    {{ (book.runtime_minutes / 60)|round(1) }} hours ({{ book.runtime_minutes }} min)
+                                    {% else %} - {% endif %}
+                                </div>
+                            </div>
+
+                            <div class="row mb-3">
+                                <div class="col-sm-3 fw-bold text-muted">Genres</div>
+                                <div class="col-sm-9">
+                                    {% for g in book.genres %}
+                                    <span class="badge bg-secondary me-1">{{ g }}</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <hr>
+
+                            <div class="mt-4">
+                                <h5 class="fw-bold">Description</h5>
+                                <div class="text-muted" style="white-space: pre-line;">
+                                    {{ book.description | safe }}
+                                </div>
+                            </div>
+
+                            <!-- RAW JSON TOGGLE -->
+                            <div class="mt-5 d-flex gap-2">
+                                <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse"
+                                    data-bs-target="#jsonView">
+                                    <i class="bi bi-code-slash"></i> View Raw JSON
+                                </button>
+
+                                {% if book.provider == 'Penguin Random House' %}
+                                <button class="btn btn-outline-primary btn-sm" type="button"
+                                    onclick="loadAlsoPurchased('{{ book.asin }}')">
+                                    <i class="bi bi-bag-heart"></i> Also Purchased
+                                </button>
+                                {% endif %}
+                            </div>
+
+                            <div class="collapse mt-2" id="jsonView">
+                                <div class="card card-body bg-light">
+                                    <pre class="small mb-0"
+                                        style="max-height: 300px;">{{ book | tojson(indent=2) }}</pre>
+                                </div>
+                            </div>
+
+                            <!-- ALSO PURCHASED SECTION -->
+                            <div id="alsoPurchasedSection" class="mt-4" style="display: none;">
+                                <h5 class="fw-bold mb-3">Customers Also Bought</h5>
+                                <div id="alsoPurchasedLoader" class="text-center py-3">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                </div>
+                                <div id="alsoPurchasedGrid" class="row g-3"></div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <!-- EMPTY STATE -->
+    <div class="text-center py-5 text-muted fade-in">
+        <i class="bi bi-search display-1 opacity-25"></i>
+        <p class="mt-3 fs-5">Select a book to view details</p>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+    .fade-in {
+        animation: fadeIn 0.5s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .search-item:hover {
+        background-color: #f8f9fa;
+        cursor: pointer;
+    }
+</style>
+
+<script>
+    const searchInput = document.getElementById('librarySearch');
+    const resultsDiv = document.getElementById('searchResults');
+    let debounceTimer;
+
+    // Handle Enter Key
+    searchInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const firstItem = resultsDiv.querySelector('a');
+            if (firstItem) {
+                firstItem.click();
+            }
+        }
+    });
+
+    searchInput.addEventListener('input', function () {
+        clearTimeout(debounceTimer);
+        const query = this.value.trim();
+
+        if (query.length < 2) {
+            resultsDiv.style.display = 'none';
+            return;
+        }
+
+        debounceTimer = setTimeout(() => {
+            fetch(`/library/search?q=${encodeURIComponent(query)}`)
+                .then(response => response.json())
+                .then(data => {
+                    resultsDiv.innerHTML = '';
+                    if (data.length > 0) {
+                        data.forEach(book => {
+                            const item = document.createElement('a');
+                            item.href = `/detail_view?asin=${book.asin}`;
+                            item.className = 'list-group-item list-group-item-action search-item d-flex align-items-center';
+
+                            const img = book.cover ? `<img src="${book.cover}" class="rounded me-3" style="width: 40px; height: 40px; object-fit: cover;">` :
+                                `<div class="rounded me-3 bg-light d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;"><i class="bi bi-book text-muted"></i></div>`;
+
+                            item.innerHTML = `
+                                ${img}
+                                <div>
+                                    <div class="fw-bold text-truncate" style="max-width: 300px;">${book.title}</div>
+                                    <div class="small text-muted text-truncate" style="max-width: 300px;">${book.author}</div>
+                                </div>
+                            `;
+                            resultsDiv.appendChild(item);
+                        });
+                        resultsDiv.style.display = 'block';
+                    } else {
+                        resultsDiv.style.display = 'none';
+                    }
+                })
+                .catch(err => console.error(err));
+        }, 300);
+    });
+
+    // Hide dropdown when clicking outside
+    document.addEventListener('click', function (e) {
+        if (!searchInput.contains(e.target) && !resultsDiv.contains(e.target)) {
+            resultsDiv.style.display = 'none';
+        }
+    });
+
+    function loadAlsoPurchased(isbn) {
+        const section = document.getElementById('alsoPurchasedSection');
+        const grid = document.getElementById('alsoPurchasedGrid');
+        const loader = document.getElementById('alsoPurchasedLoader');
+
+        section.style.display = 'block';
+        grid.innerHTML = '';
+        loader.style.display = 'block';
+
+        // Clean ISBN just in case
+        const cleanIsbn = isbn.replace(/-/g, '');
+
+        fetch(`/prh/also-purchased/${cleanIsbn}`)
+            .then(res => res.json())
+            .then(data => {
+                loader.style.display = 'none';
+                if (data.length === 0) {
+                    grid.innerHTML = '<div class="col-12 text-muted">No recommendations found.</div>';
+                    return;
+                }
+
+                data.forEach(book => {
+                    const col = document.createElement('div');
+                    col.className = 'col-6 col-md-4 col-lg-3';
+                    col.innerHTML = `
+                        <div class="card h-100 shadow-sm border-0">
+                            <img src="${book.cover_image}" class="card-img-top" alt="${book.title}" 
+                                 style="height: 150px; object-fit: cover; object-position: top;">
+                            <div class="card-body p-2">
+                                <h6 class="card-title text-truncate small fw-bold mb-1" title="${book.title}">${book.title}</h6>
+                                <p class="card-text small text-muted text-truncate mb-0">${book.authors.join(', ')}</p>
+                                <a href="/detail_view?asin=${book.asin}" class="stretched-link"></a>
+                            </div>
+                        </div>
+                    `;
+                    grid.appendChild(col);
+                });
+            })
+            .catch(err => {
+                console.error(err);
+                loader.style.display = 'none';
+                grid.innerHTML = '<div class="col-12 text-danger">Failed to load recommendations.</div>';
+            });
+    }
+</script>
+{% endblock %}

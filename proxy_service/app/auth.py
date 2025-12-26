@@ -25,6 +25,23 @@ def create_access_token(data: dict):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
+from app.database import get_stored_password_hash
+
+# --- HELPER: Get Active Password Hash ---
+async def get_active_password_hash():
+    """
+    Returns the active password hash.
+    Priority:
+    1. Environment Variable (config.ADMIN_PASSWORD_HASH)
+    2. Database (settings_collection)
+    """
+    if ADMIN_PASSWORD_HASH:
+        return ADMIN_PASSWORD_HASH
+    
+    # Check DB
+    db_hash = await get_stored_password_hash()
+    return db_hash
+
 # --- DEPENDENCY: Check Auth (Cookie OR Header) ---
 async def get_current_user(request: Request):
     """
@@ -32,6 +49,15 @@ async def get_current_user(request: Request):
     1. The 'Authorization' Header (API usage)
     2. The 'access_token' Cookie (Browser usage)
     """
+    
+    # 0. Check if system is initialized
+    active_hash = await get_active_password_hash()
+    if not active_hash:
+        # System is not initialized (no password set)
+        # We raise a special error or just 401. 
+        # The UI router will handle redirection to /setup if needed.
+        raise HTTPException(status_code=401, detail="System not initialized")
+
     token = None
     
     # 1. Check Header
@@ -44,8 +70,6 @@ async def get_current_user(request: Request):
         token = request.cookies.get("access_token")
 
     if not token:
-        # If browser request, redirect to login is handled by the router exception handler
-        # But here we just raise 401
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",

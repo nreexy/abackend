@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setup - Audiobook Metadata Proxy</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --text-color: #e2e8f0;
+            --card-bg: #1e293b;
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --error: #ef4444;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .login-card {
+            background-color: var(--card-bg);
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 0.5rem;
+            margin-top: 0;
+        }
+
+        p.subtitle {
+            text-align: center;
+            color: #94a3b8;
+            margin-bottom: 2rem;
+            font-size: 0.9rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+            color: #cbd5e1;
+        }
+
+        input {
+            width: 100%;
+            padding: 0.75rem;
+            border-radius: 6px;
+            border: 1px solid #475569;
+            background-color: #334155;
+            color: white;
+            font-size: 1rem;
+            box-sizing: border-box;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px var(--primary);
+        }
+
+        button {
+            width: 100%;
+            padding: 0.75rem;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .error-msg {
+            background-color: rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+            padding: 0.75rem;
+            border-radius: 6px;
+            margin-bottom: 1.5rem;
+            text-align: center;
+            font-size: 0.9rem;
+            border: 1px solid rgba(239, 68, 68, 0.4);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="login-card">
+        <h1>Welcome</h1>
+        <p class="subtitle">Please set an admin password to continue.</p>
+
+        {% if error %}
+        <div class="error-msg">{{ error }}</div>
+        {% endif %}
+
+        <form action="/setup" method="POST">
+            <div class="form-group">
+                <label for="password">New Password</label>
+                <input type="password" id="password" name="password" required autofocus>
+            </div>
+
+            <div class="form-group">
+                <label for="confirm_password">Confirm Password</label>
+                <input type="password" id="confirm_password" name="confirm_password" required>
+            </div>
+
+            <button type="submit">Set Password</button>
+        </form>
+    </div>
+</body>
+
+</html>
