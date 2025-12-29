@@ -1,10 +1,11 @@
+import os
 from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from app.config import SECRET_KEY, ALGORITHM, ADMIN_USERNAME, ADMIN_PASSWORD_HASH
+from app.config import SECRET_KEY, ALGORITHM, ADMIN_USERNAME, ADMIN_PASSWORD_HASH, ENABLE_PASSWORD_RESET_FILE
 
 # Password Hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -25,7 +26,7 @@ def create_access_token(data: dict):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-from app.database import get_stored_password_hash
+from app.database import get_stored_password_hash, clear_stored_password_hash
 
 # --- HELPER: Get Active Password Hash ---
 async def get_active_password_hash():
@@ -41,6 +42,59 @@ async def get_active_password_hash():
     # Check DB
     db_hash = await get_stored_password_hash()
     return db_hash
+
+async def check_password_reset_file():
+    """
+    Checks for the presence of a .passreset file to trigger a password reset.
+    Checks locations relative to this file:
+    1. Service Root (../.passreset) - e.g. proxy_service/.passreset
+    2. Repo Root (../../.passreset) - e.g. audio-metadata-server/.passreset
+    
+    If found and no environment password is set, clears the DB password and deletes the file.
+    Returns True if reset occurred, False otherwise.
+    """
+    # 0. Check Toggle
+    if not ENABLE_PASSWORD_RESET_FILE:
+        return False
+
+    # Calculate paths relative to app/auth.py
+    # Calculate paths relative to app/auth.py
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    service_root = os.path.dirname(current_dir) # proxy_service
+    repo_root = os.path.dirname(service_root)   # audio-metadata-server
+    
+    candidates = [
+        os.path.join(service_root, ".passreset"),
+        os.path.join(repo_root, ".passreset")
+    ]
+    
+    found_file = None
+    for path in candidates:
+        if os.path.exists(path):
+            found_file = path
+            break
+            
+    if found_file:
+        print(f"⚠️ Found reset file at {found_file}. Attempting password reset...")
+        
+        # 1. Check if ENV pass is enforced
+        if ADMIN_PASSWORD_HASH and os.getenv("ADMIN_PASSWORD_HASH"):
+             print("❌ Cannot reset password: ADMIN_PASSWORD_HASH is set in environment variables.")
+             return False
+             
+        # 2. Clear DB
+        await clear_stored_password_hash()
+        print("✅ Password hash cleared from database.")
+        
+        # 3. Delete File
+        try:
+            os.remove(found_file)
+            print(f"🗑️ Deleted {found_file}")
+        except Exception as e:
+            print(f"⚠️ Failed to delete {found_file}: {e}")
+            
+        return True
+    return False
 
 # --- DEPENDENCY: Check Auth (Cookie OR Header) ---
 async def get_current_user(request: Request):

@@ -7,7 +7,9 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7 # 7 Days
 
 # --- ADMIN CREDENTIALS ---
+# --- ADMIN CREDENTIALS ---
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
+ENABLE_PASSWORD_RESET_FILE = os.getenv("ENABLE_PASSWORD_RESET_FILE", "false").lower() == "true"
 
 # 1. Check for Env Var Hash
 # 1. Check for Env Var Hash

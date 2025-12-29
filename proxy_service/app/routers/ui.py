@@ -5,7 +5,7 @@ from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 # Auth Logic
-from app.auth import verify_password, create_access_token, get_current_user, ADMIN_USERNAME, get_active_password_hash, get_password_hash
+from app.auth import verify_password, create_access_token, get_current_user, ADMIN_USERNAME, get_active_password_hash, get_password_hash, check_password_reset_file
 from app.database import (
     set_stored_password_hash, 
     get_dashboard_stats, 
@@ -81,6 +81,10 @@ async def login_page(request: Request):
     # Check if setup needed
     if not await get_active_password_hash():
         return RedirectResponse(url="/setup", status_code=303)
+    
+    # Check for Reset File (Triggers Reset if present)
+    if await check_password_reset_file():
+        return RedirectResponse(url="/setup?reset=true", status_code=303)
         
     return templates.TemplateResponse("login.html", {"request": request})
 
@@ -273,9 +277,9 @@ async def view_detail_page(request: Request, asin: Optional[str] = None):
                 
         if book:
              # Format for UI (similar to library view)
-             book['authors_str'] = ", ".join(book.get("authors", []))
-             book['narrators_str'] = ", ".join(book.get("narrators", []))
-             book['genres_str'] = ", ".join(book.get("genres", []))
+             book['authors_str'] = ", ".join(book.get("authors") or [])
+             book['narrators_str'] = ", ".join(book.get("narrators") or [])
+             book['genres_str'] = ", ".join(book.get("genres") or [])
              s = book.get("series", [])
              book['series_str'] = f"{s[0].get('name')} #{s[0].get('sequence')}" if s else "-"
     

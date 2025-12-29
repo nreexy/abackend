@@ -227,6 +227,13 @@ async def set_stored_password_hash(hash_str: str):
         upsert=True
     )
 
+async def clear_stored_password_hash():
+    """Removes the admin password hash from the database."""
+    await settings_collection.update_one(
+        {"_id": "auth_config"},
+        {"$unset": {"password_hash": ""}}
+    )
+
 # --- CUSTOM FIELDS ---
 async def get_custom_fields(asin: str):
     return await custom_fields_collection.find_one({"asin": asin}, {"_id": 0})

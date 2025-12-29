@@ -1,14 +1,14 @@
-# 🎧 Abackend Audiobook Metadata Proxy
+# Abackend Audiobook Metadata Proxy
 
 A high-performance, self-hosted **metadata aggregator API** and **dashboard** for audiobook collectors and developers.
 
-This server sits between your mobile app/media server and external data sources. It aggregates, normalizes, and caches metadata from **Audible, iTunes, Goodreads, Google Books, and Penguin Random House** into a single, unified JSON format.
+This server sits between your mobile app/media server and external data sources. It aggregates, normalizes, and caches metadata from **Audible, iTunes, Goodreads, Google Books, Penguin Random House, and Hardcover** into a single, unified JSON format.
 
 ![Library View](screenshots/Library.png)
 
-## ✨ Features
+## Features
 
-*   **Multi-Provider Search:** Parallel querying of Audible, iTunes, Goodreads, Google Books and PRH with results merging.
+*   **Multi-Provider Search:** Parallel querying of Audible, iTunes, Goodreads, Google Books, PRH, and **Hardcover** with results merging.
 *   **Smart Caching:**
     *   **Redis:** Hot cache for millisecond-response times.
     *   **MongoDB:** Persistent library storage (scales to 100k+ books).
@@ -21,7 +21,7 @@ This server sits between your mobile app/media server and external data sources.
     *   **Logs:** Live system logs viewer.
 *   **Authentication:** Secure JWT-based authentication for API and Dashboard access.
 
-## 📸 Interface
+## Interface
 
 <p align="center">
   <img src="screenshots/listsCharts.png" width="48%" alt="Lists and Charts Import">
@@ -30,7 +30,7 @@ This server sits between your mobile app/media server and external data sources.
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 *   **Docker** & **Docker Compose**
@@ -64,6 +64,7 @@ Create a `.env` file in the root directory (or use the defaults in `docker-compo
 MONGO_URL=mongodb://mongo_db:27017
 REDIS_URL=redis://redis_cache:6379
 PRH_API_KEY=your_key_here  # Optional: For Penguin Random House support
+HARDCOVER_API_KEY=your_key_here # Optional: For Hardcover.app support
 SECRET_KEY=super_secret_string_change_me
 ADMIN_USERNAME=admin
 # ADMIN_PASSWORD_HASH=... (Optional: Generated automatically on startup if missing)
@@ -78,9 +79,20 @@ Once running, access the dashboard at: **http://localhost:8000/dashboard**
 *   **Default User:** `admin`
 *   **Default Password:** `admin`
 
+### 5. Password Reset
+If you lose your admin password, you can reset it by accessing the server's file system:
+
+> [!CAUTION]
+> This feature is disabled by default for security. You must first set `ENABLE_PASSWORD_RESET_FILE=true` in your `.env` file and restart the container.
+
+1.  Create an empty file named `.passreset` in the **project root** or **service root** directory.
+2.  Navigate to the `/login` page in your browser.
+3.  The system will detect the file, **clear your password**, delete the file, and redirect you to the setup page.
+
+
 ---
 
-## 📚 Dashboard & UI
+## Dashboard & UI
 
 *   **Dashboard:** Overview of top requested books and recent activity.
 *   **Library:** A spreadsheet-style view of all cached books. Supports filtering by Rating, Language, Provider, and Year.
@@ -90,7 +102,7 @@ Once running, access the dashboard at: **http://localhost:8000/dashboard**
 
 ---
 
-## 🔌 API Reference
+## API Reference
 
 The API is protected. You must include the `Authorization: Bearer <token>` header or be logged into the dashboard (Cookie).
 
@@ -122,7 +134,7 @@ Content-Type: application/json
 
 ---
 
-## 🛠 Architecture
+## Architecture
 
 ```mermaid
 graph TD
@@ -139,12 +151,13 @@ graph TD
         Proxy -->|Async| Goodreads["Goodreads Scraper"]
         Proxy -->|Async| PRH["Penguin Random House API"]
         Proxy -->|Async| GoogleBooks["Google Books API"]
+        Proxy -->|Async| Hardcover["Hardcover API"] 
     end
     
     Audible -->|Chapters| Audnexus["Audnexus Engine"]
 ```
 
-## 📦 Data Providers
+## Data Providers
 
 | Provider | Status | Best For | Notes |
 | :--- | :--- | :--- | :--- |
@@ -153,14 +166,15 @@ graph TD
 | **Goodreads** | 🟢 Active | User Ratings, Genres, Lists | Web scraping (Rate limited) |
 | **PRH** | 🟢 Active | Official Descriptions, ISBNs | Requires API Key |
 | **Google Books** | 🟢 Active | Official Descriptions, ISBNs | Requires API Key |
+| **Hardcover** | 🟢 Active | User Ratings, Genres, Series | Requires API Key |
 
-## 🤝 Contributing
+## Contributing
 
 1.  Fork the repository.
 2.  Create a feature branch (`git checkout -b feature/NewProvider`).
 3.  Commit your changes.
 4.  Push to the branch and open a Pull Request.
 
-## 📄 License
+## License
 
 Distributed under the MIT License. See `LICENSE` for more information.
