@@ -1,5 +1,6 @@
 from typing import Optional # <--- FIXED: Added this import
 from urllib.parse import urlencode
+import json
 from fastapi import APIRouter, Request, Form, Depends, HTTPException, status, Response
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -23,7 +24,9 @@ from app.database import (
     delete_book_from_library,
     get_book_from_db,
     get_cache,
-    set_cache
+    set_cache,
+    get_collection_names,
+    execute_admin_query
 )
 from app.limiter import limiter
 
@@ -219,7 +222,11 @@ async def update_settings(
     prh_api_key: str = Form(None),
     hardcover_api_key: str = Form(None),
     prov_hardcover: bool = Form(False),
-    preserve_settings: bool = Form(False)
+    preserve_settings: bool = Form(False),
+    # Clear Flags
+    clear_google_books_api_key: bool = Form(False),
+    clear_prh_api_key: bool = Form(False),
+    clear_hardcover_api_key: bool = Form(False)
 ):
     if not await check_ui_auth(request): return RedirectResponse("/login")
 
@@ -230,6 +237,11 @@ async def update_settings(
         search_limit = current_config.get("search_limit", 5)
         scrape_limit_pages = current_config.get("scrape_limit_pages", 100)
         
+        # Handle Clearing Keys (Override input if clear is requested)
+        if clear_google_books_api_key: google_books_api_key = ""
+        if clear_prh_api_key: prh_api_key = ""
+        if clear_hardcover_api_key: hardcover_api_key = ""
+
         # Only update the key
         await save_system_settings(providers, search_limit, scrape_limit_pages, google_books_api_key, prh_api_key, hardcover_api_key)
         
@@ -371,6 +383,44 @@ async def view_documentation(request: Request):
         "request": request, 
         "active_page": "documentation"
     })
+
+@router.get("/database")
+async def view_database_explorer(request: Request):
+    if not await check_ui_auth(request): return RedirectResponse("/login")
+    
+    collections = await get_collection_names()
+    collections.sort()
+    
+    return templates.TemplateResponse("database.html", {
+        "request": request, 
+        "active_page": "database",
+        "collections": collections
+    })
+
+@router.post("/database/query")
+async def query_database_action(request: Request):
+    if not await check_ui_auth(request): 
+        return Response(status_code=401, content="Unauthorized")
+        
+    try:
+        data = await request.json()
+        collection = data.get("collection")
+        query_str = data.get("query", "{}")
+        
+        if not collection: return Response(status_code=400, content="Missing collection")
+        
+        # Parse JSON Query safely
+        try:
+            query_dict = json.loads(query_str)
+        except json.JSONDecodeError:
+            return Response(status_code=400, content="Invalid JSON Query")
+            
+        result = await execute_admin_query(collection, query_dict)
+        return result
+        
+    except Exception as e:
+        return Response(status_code=500, content=str(e))
+
 
 
 

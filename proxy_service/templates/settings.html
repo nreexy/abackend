@@ -70,6 +70,10 @@
                     <input type="password" class="form-control" name="google_books_api_key"
                         value="{{ config.google_books_api_key or '' }}" placeholder="Enter API Key">
                     <button class="btn btn-primary" type="submit">Save Key</button>
+                    <button class="btn btn-outline-danger" type="submit" name="clear_google_books_api_key" value="true"
+                        title="Remove Key">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
                 </div>
             </form>
         </div>
@@ -91,6 +95,10 @@
                     <input type="password" class="form-control" name="prh_api_key"
                         value="{{ config.prh_api_key or '' }}" placeholder="Enter API Key">
                     <button class="btn btn-primary" type="submit">Save Key</button>
+                    <button class="btn btn-outline-danger" type="submit" name="clear_prh_api_key" value="true"
+                        title="Remove Key">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
                 </div>
             </form>
         </div>
@@ -113,6 +121,10 @@
                     <input type="password" class="form-control" name="hardcover_api_key"
                         value="{{ config.hardcover_api_key or '' }}" placeholder="Enter Bearer Token">
                     <button class="btn btn-primary" type="submit">Save Key</button>
+                    <button class="btn btn-outline-danger" type="submit" name="clear_hardcover_api_key" value="true"
+                        title="Remove Key">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
                 </div>
             </form>
         </div>

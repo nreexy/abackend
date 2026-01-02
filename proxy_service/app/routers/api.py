@@ -244,6 +244,14 @@ async def search_audiobook(
         req_id = str(uuid.uuid4())
         tasks = []
         
+        # Initialize flags to avoid usage-before-assignment errors
+        use_audible = False
+        use_itunes = False
+        use_goodreads = False
+        use_prh = False
+        use_google = False
+        use_hardcover = False
+
         if providers:
             target_list = [p.lower().strip() for p in providers.split(",")]
             use_audible = "audible" in target_list
@@ -277,21 +285,21 @@ async def search_audiobook(
             tasks.append(benchmark_call(req_id, "Goodreads", goodreads.search_scraper, search_term))
 
         if use_prh:
-                    if isbn:
-                        # FIX: If we have an ISBN, use fetch_details (direct lookup)
-                        # instead of search_raw (text search), which often fails for numbers.
-                        async def prh_isbn_lookup():
-                            # Ensure clean ISBN (PRH dislikes hyphens in URL path)
-                            clean_isbn = isbn.replace("-", "").strip()
-                            detail = await prh.fetch_details(clean_isbn)
-                            return [detail] if detail else []
+            if isbn:
+                # FIX: If we have an ISBN, use fetch_details (direct lookup)
+                # instead of search_raw (text search), which often fails for numbers.
+                async def prh_isbn_lookup():
+                    # Ensure clean ISBN (PRH dislikes hyphens in URL path)
+                    clean_isbn = isbn.replace("-", "").strip()
+                    detail = await prh.fetch_details(clean_isbn)
+                    return [detail] if detail else []
 
-                        tasks.append(benchmark_call(req_id, "PRH", prh_isbn_lookup))
-                    else:
-                        # Standard text search
-                        search_term = q or author
-                        if search_term:
-                            tasks.append(benchmark_call(req_id, "PRH", prh.search_raw, search_term, limit=limit))
+                tasks.append(benchmark_call(req_id, "PRH", prh_isbn_lookup))
+            else:
+                # Standard text search
+                search_term = q or author
+                if search_term:
+                    tasks.append(benchmark_call(req_id, "PRH", prh.search_raw, search_term, limit=limit))
         if use_google:
             search_term = isbn if isbn else (f"{q} {author}" if q and author else (q or author))
             api_key = config.get("google_books_api_key")
