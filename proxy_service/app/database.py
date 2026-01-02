@@ -181,9 +181,9 @@ DEFAULT_SETTINGS = {
     "providers": {"audible": True, "itunes": True, "goodreads": True, "prh": True, "google": False, "hardcover": False},
     "search_limit": 5, 
     "scrape_limit_pages": 100,
-    "google_books_api_key": "",
-    "prh_api_key": "",
-    "hardcover_api_key": ""
+    "google_books_api_key": os.getenv("GOOGLE_BOOKS_API_KEY", ""),
+    "prh_api_key": os.getenv("PRH_API_KEY", ""),
+    "hardcover_api_key": os.getenv("HARDCOVER_API_KEY", "")
 }
 
 async def get_system_settings():

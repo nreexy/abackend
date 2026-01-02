@@ -66,8 +66,11 @@ Create a `.env` file in the root directory (or use the defaults in `docker-compo
 # Optional Overrides
 MONGO_URL=mongodb://mongo_db:27017
 REDIS_URL=redis://redis_cache:6379
-PRH_API_KEY=your_key_here  # Optional: For Penguin Random House support
-HARDCOVER_API_KEY=your_key_here # Optional: For Hardcover.app support
+
+# API Keys (Can also be managed via Settings UI)
+GOOGLE_BOOKS_API_KEY=your_key_here
+PRH_API_KEY=your_key_here
+HARDCOVER_API_KEY=your_key_here
 SECRET_KEY=super_secret_string_change_me
 ADMIN_USERNAME=admin
 # ADMIN_PASSWORD_HASH=... (Optional: Generated automatically on startup if missing)
