@@ -1,259 +1,311 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="container-fluid">
-    <h2 class="mb-4">System Settings</h2>
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-5">
+        <div>
+            <h2 class="fw-bold m-0 text-dark">Settings</h2>
+            <p class="text-muted m-0 small">Manage Providers, API Keys & System Cache</p>
+        </div>
+    </div>
 
+    <!-- Alert Messages -->
     {% if request.query_params.get('saved') %}
-    <div class="alert alert-success alert-dismissible fade show" role="alert">
-        Settings saved successfully!
+    <div class="alert alert-success alert-dismissible fade show shadow-sm border-0" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i> Settings saved successfully!
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
     {% endif %}
     {% if request.query_params.get('flushed') %}
-    <div class="alert alert-warning alert-dismissible fade show" role="alert">
-        <strong>Cache Flushed!</strong> All metadata has been cleared from Redis.
+    <div class="alert alert-warning alert-dismissible fade show shadow-sm border-0" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i> <strong>Cache Flushed!</strong> All metadata has been
+        cleared from Redis.
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
     {% endif %}
 
-    <!-- API ACCESS CARD -->
-    <div class="card shadow-sm border-0 mb-4 border-start border-4 border-primary">
-        <div class="card-body">
-            <div class="d-flex align-items-center justify-content-between">
-                <div>
-                    <h5 class="card-title mb-1"><i class="bi bi-key"></i> API Access Token</h5>
-                    <p class="text-muted small mb-0">
-                        Use this Bearer Token to authenticate external apps (e.g., Mobile App, cURL).
-                        Header: <code>Authorization: Bearer &lt;token&gt;</code>
-                    </p>
-                </div>
-            </div>
+    <div class="row g-4">
+        <!-- LEFT COLUMN: Main Configuration -->
+        <div class="col-lg-8">
 
-            <div class="mt-3">
-                <label class="form-label fw-bold small text-uppercase text-muted">Your Token</label>
-                <div class="input-group">
-                    <span class="input-group-text bg-light"><i class="bi bi-shield-lock"></i></span>
-                    <!-- Input is readonly and type="password" to hide by default -->
-                    <input type="password" class="form-control font-monospace" id="apiTokenField"
-                        value="{{ api_token }}" readonly>
-
-                    <button class="btn btn-outline-secondary" type="button" onclick="toggleTokenVisibility()"
-                        title="Show/Hide">
-                        <i class="bi bi-eye" id="toggleIcon"></i>
-                    </button>
-
-                    <button class="btn btn-primary" type="button" onclick="copyToken()" id="copyBtn">
-                        <i class="bi bi-clipboard"></i> Copy Key
-                    </button>
-                </div>
-                <div class="form-text text-danger" id="copyMsg" style="visibility: hidden; height: 20px;">
-                    <i class="bi bi-check-circle-fill"></i> Copied to clipboard!
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- GOOGLE BOOKS API KEY CARD -->
-    <div class="card shadow-sm border-0 mb-4 border-start border-4 border-success">
-        <div class="card-body">
-            <h5 class="card-title mb-1"><i class="bi bi-google"></i> Google Books API Key</h5>
-            <p class="text-muted small mb-3">
-                Required for fetching metadata from Google Books.
-            </p>
-            <form action="/settings/update" method="post">
-                <!-- Hidden fields to preserve other settings -->
-                <input type="hidden" name="preserve_settings" value="true">
-
-                <div class="input-group">
-                    <span class="input-group-text bg-light"><i class="bi bi-key"></i></span>
-                    <input type="password" class="form-control" name="google_books_api_key"
-                        value="{{ config.google_books_api_key or '' }}" placeholder="Enter API Key">
-                    <button class="btn btn-primary" type="submit">Save Key</button>
-                    <button class="btn btn-outline-danger" type="submit" name="clear_google_books_api_key" value="true"
-                        title="Remove Key">
-                        <i class="bi bi-x-lg"></i>
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- PRH API KEY CARD -->
-    <div class="card shadow-sm border-0 mb-4 border-start border-4" style="border-color: #FF6600 !important;">
-        <div class="card-body">
-            <h5 class="card-title mb-1" style="color: #FF6600;"><i class="bi bi-book"></i> PRH API Key</h5>
-            <p class="text-muted small mb-3">
-                Required for fetching metadata from Penguin Random House.
-            </p>
-            <form action="/settings/update" method="post">
-                <!-- Hidden fields to preserve other settings -->
-                <input type="hidden" name="preserve_settings" value="true">
-
-                <div class="input-group">
-                    <span class="input-group-text bg-light"><i class="bi bi-key"></i></span>
-                    <input type="password" class="form-control" name="prh_api_key"
-                        value="{{ config.prh_api_key or '' }}" placeholder="Enter API Key">
-                    <button class="btn btn-primary" type="submit">Save Key</button>
-                    <button class="btn btn-outline-danger" type="submit" name="clear_prh_api_key" value="true"
-                        title="Remove Key">
-                        <i class="bi bi-x-lg"></i>
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- HARDCOVER API KEY CARD -->
-    <div class="card shadow-sm border-0 mb-4 border-start border-4" style="border-color: #723b96 !important;">
-        <div class="card-body">
-            <h5 class="card-title mb-1" style="color: #723b96;"><i class="bi bi-journal-album"></i> Hardcover API Key
-            </h5>
-            <p class="text-muted small mb-3">
-                Required for fetching metadata from Hardcover.app.
-            </p>
-            <form action="/settings/update" method="post">
-                <!-- Hidden fields to preserve other settings -->
-                <input type="hidden" name="preserve_settings" value="true">
-
-                <div class="input-group">
-                    <span class="input-group-text bg-light"><i class="bi bi-key"></i></span>
-                    <input type="password" class="form-control" name="hardcover_api_key"
-                        value="{{ config.hardcover_api_key or '' }}" placeholder="Enter Bearer Token">
-                    <button class="btn btn-primary" type="submit">Save Key</button>
-                    <button class="btn btn-outline-danger" type="submit" name="clear_hardcover_api_key" value="true"
-                        title="Remove Key">
-                        <i class="bi bi-x-lg"></i>
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- EXISTING ROW (Configuration & Danger Zone) -->
-    <div class="row">
-
-        <!-- Configuration Card -->
-        <div class="col-md-8">
+            <!-- Global Search Config -->
             <div class="card shadow-sm border-0 mb-4">
                 <div class="card-header bg-white py-3">
-                    <h5 class="mb-0"><i class="bi bi-sliders"></i> Search Configuration</h5>
+                    <h6 class="mb-0 fw-bold text-dark"><i class="bi bi-sliders me-2 text-primary"></i>System Limits</h6>
                 </div>
                 <div class="card-body">
-                    <form action="/settings/update" method="post">
-
-                        <!-- Search Limit -->
-                        <div class="row mb-4">
+                    <form action="/settings/update" method="post" id="mainForm">
+                        <div class="row g-3">
                             <div class="col-md-6">
-                                <label for="limit" class="form-label fw-bold">Search Results (per Provider)</label>
-                                <input type="number" class="form-control" id="limit" name="limit"
-                                    value="{{ config.search_limit }}" min="1" max="20">
-                                <div class="form-text">Max results per API during search.</div>
+                                <label for="limit" class="form-label fw-bold small text-uppercase text-muted">Search
+                                    Depth</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light border-end-0"><i
+                                            class="bi bi-search"></i></span>
+                                    <input type="number" class="form-control border-start-0 ps-0" id="limit"
+                                        name="limit" value="{{ config.search_limit }}" min="1" max="20">
+                                </div>
+                                <div class="form-text small">Max results per provider (1-20).</div>
                             </div>
                             <div class="col-md-6">
-                                <label for="scrape_limit" class="form-label fw-bold">List Import Limit (Pages)</label>
-                                <input type="number" class="form-control" id="scrape_limit" name="scrape_limit"
-                                    value="{{ config.scrape_limit_pages or 100 }}" min="1" max="500">
-                                <div class="form-text">Max Goodreads pages to scrape (1 page = 100 books).</div>
+                                <label for="scrape_limit"
+                                    class="form-label fw-bold small text-uppercase text-muted">Scrape Limit</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light border-end-0"><i
+                                            class="bi bi-cloud-download"></i></span>
+                                    <input type="number" class="form-control border-start-0 ps-0" id="scrape_limit"
+                                        name="scrape_limit" value="{{ config.scrape_limit_pages or 100 }}" min="1"
+                                        max="500">
+                                </div>
+                                <div class="form-text small">Max pages for list imports.</div>
                             </div>
                         </div>
-
-                        <hr>
-
-                        <!-- Provider Toggles (Keep existing code below...) -->
-                        <label class="form-label fw-bold mb-3">Active Providers</label>
-
-                        <div class="form-check form-switch mb-3">
-                            <input class="form-check-input" type="checkbox" id="prov_audible" name="prov_audible"
-                                value="true" {% if config.providers.audible %}checked{% endif %}>
-                            <label class="form-check-label" for="prov_audible">
-                                <span class="badge bg-warning text-dark border">Audible</span>
-                                <span class="text-muted ms-2">(Rich metadata, Chapters, Ratings)</span>
-                            </label>
-                        </div>
-
-                        <div class="form-check form-switch mb-3">
-                            <input class="form-check-input" type="checkbox" id="prov_itunes" name="prov_itunes"
-                                value="true" {% if config.providers.itunes %}checked{% endif %}>
-                            <label class="form-check-label" for="prov_itunes">
-                                <span class="badge bg-info text-white border">iTunes</span>
-                                <span class="text-muted ms-2">(High-res covers, Release dates)</span>
-                            </label>
-                        </div>
-
-                        <div class="form-check form-switch mb-3">
-                            <input class="form-check-input" type="checkbox" id="prov_goodreads" name="prov_goodreads"
-                                value="true" {% if config.providers.goodreads %}checked{% endif %}>
-                            <label class="form-check-label" for="prov_goodreads">
-                                <span class="badge bg-success border">Goodreads</span>
-                                <span class="text-muted ms-2">(Descriptions, Community Ratings)</span>
-                            </label>
-                        </div>
-
-                        <div class="form-check form-switch mb-3">
-                            <input class="form-check-input" type="checkbox" id="prov_prh" name="prov_prh" value="true"
-                                {% if config.providers.prh %}checked{% endif %}>
-                            <label class="form-check-label" for="prov_prh">
-                                <span class="badge" style="background-color: #FF6600; color: white;">Penguin Random
-                                    House</span>
-                                <span class="text-muted ms-2">(Official Publisher Metadata)</span>
-                            </label>
-                        </div>
-
-                        <div class="form-check form-switch mb-3">
-                            <input class="form-check-input" type="checkbox" id="prov_google" name="prov_google"
-                                value="true" {% if config.providers.google %}checked{% endif %}>
-                            <label class="form-check-label" for="prov_google">
-                                <span class="badge bg-primary border">Google Books</span>
-                                <span class="text-muted ms-2">(Extensive Library, Series Info)</span>
-                            </label>
-                        </div>
-
-                        <div class="form-check form-switch mb-3">
-                            <input class="form-check-input" type="checkbox" id="prov_hardcover" name="prov_hardcover"
-                                value="true" {% if config.providers.hardcover %}checked{% endif %}>
-                            <label class="form-check-label" for="prov_hardcover">
-                                <span class="badge"
-                                    style="background-color: #723b96; color: white;">Hardcover.app</span>
-                                <span class="text-muted ms-2">(Social Book Data)</span>
-                            </label>
-                        </div>
-
-                        <div class="mt-4">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-save"></i> Save Changes
-                            </button>
-                        </div>
-                    </form>
                 </div>
+            </div>
+
+            <!-- Provider Configuration (Unified) -->
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 fw-bold text-dark"><i class="bi bi-plug me-2 text-primary"></i>Metadata Providers
+                    </h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush">
+
+                        <!-- Audible -->
+                        <div class="list-group-item p-4">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="prov_audible"
+                                            name="prov_audible" value="true" {% if config.providers.audible %}checked{%
+                                            endif %}>
+                                        <label class="form-check-label fw-bold" for="prov_audible">Audible</label>
+                                    </div>
+                                    <div class="small text-muted ms-5 ps-1">Chapters, Narrators, Series, Ratings</div>
+                                </div>
+                                <span class="badge bg-warning text-dark border"><i
+                                        class="bi bi-star-fill me-1"></i>Core</span>
+                            </div>
+                        </div>
+
+                        <!-- iTunes -->
+                        <div class="list-group-item p-4">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="prov_itunes"
+                                            name="prov_itunes" value="true" {% if config.providers.itunes %}checked{%
+                                            endif %}>
+                                        <label class="form-check-label fw-bold" for="prov_itunes">iTunes (Apple
+                                            Books)</label>
+                                    </div>
+                                    <div class="small text-muted ms-5 ps-1">High-Res Covers, Exact Release Dates</div>
+                                </div>
+                                <span class="badge bg-secondary-subtle text-secondary border">Public API</span>
+                            </div>
+                        </div>
+
+                        <!-- Goodreads -->
+                        <div class="list-group-item p-4">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="prov_goodreads"
+                                            name="prov_goodreads" value="true" {% if config.providers.goodreads
+                                            %}checked{% endif %}>
+                                        <label class="form-check-label fw-bold" for="prov_goodreads">Goodreads</label>
+                                    </div>
+                                    <div class="small text-muted ms-5 ps-1">Community Ratings, Genres, List Imports
+                                    </div>
+                                </div>
+                                <span class="badge bg-success-subtle text-success border">Scraper</span>
+                            </div>
+                        </div>
+
+                        <!-- Google Books -->
+                        <div class="list-group-item p-4 bg-light bg-opacity-10">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <div>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="prov_google"
+                                            name="prov_google" value="true" {% if config.providers.google %}checked{%
+                                            endif %}>
+                                        <label class="form-check-label fw-bold" for="prov_google">Google Books</label>
+                                    </div>
+                                </div>
+                                <span class="badge bg-primary-subtle text-primary border">API Key Req.</span>
+                            </div>
+                            <!-- Inline API Key Input -->
+                            <div class="ms-5 ps-1">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text bg-white text-muted">Key</span>
+                                    <input type="password" class="form-control" name="google_books_api_key"
+                                        value="{{ config.google_books_api_key or '' }}"
+                                        placeholder="Enter Google Books API Key">
+                                    {% if config.google_books_api_key %}
+                                    <button class="btn btn-outline-danger" type="submit" form="clearGoogle"
+                                        title="Clear Key">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Penguin Random House -->
+                        <div class="list-group-item p-4 bg-light bg-opacity-10">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <div>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="prov_prh" name="prov_prh"
+                                            value="true" {% if config.providers.prh %}checked{% endif %}>
+                                        <label class="form-check-label fw-bold" for="prov_prh">Penguin Random
+                                            House</label>
+                                    </div>
+                                </div>
+                                <span class="badge bg-warning-subtle text-warning border">API Key Req.</span>
+                            </div>
+                            <div class="ms-5 ps-1">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text bg-white text-muted">Key</span>
+                                    <input type="password" class="form-control" name="prh_api_key"
+                                        value="{{ config.prh_api_key or '' }}" placeholder="Enter PRH API Key">
+                                    {% if config.prh_api_key %}
+                                    <button class="btn btn-outline-danger" type="submit" form="clearPRH"
+                                        title="Clear Key">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Hardcover -->
+                        <div class="list-group-item p-4 bg-light bg-opacity-10">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <div>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="prov_hardcover"
+                                            name="prov_hardcover" value="true" {% if config.providers.hardcover
+                                            %}checked{% endif %}>
+                                        <label class="form-check-label fw-bold"
+                                            for="prov_hardcover">Hardcover.app</label>
+                                    </div>
+                                </div>
+                                <span class="badge border"
+                                    style="background-color: rgba(114, 59, 150, 0.1); color: #723b96;">API Key
+                                    Req.</span>
+                            </div>
+                            <div class="ms-5 ps-1">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text bg-white text-muted">Key</span>
+                                    <input type="password" class="form-control" name="hardcover_api_key"
+                                        value="{{ config.hardcover_api_key or '' }}"
+                                        placeholder="Enter Hardcover Bearer Token">
+                                    {% if config.hardcover_api_key %}
+                                    <button class="btn btn-outline-danger" type="submit" form="clearHardcover"
+                                        title="Clear Key">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+                <div class="card-footer bg-light py-3">
+                    <button type="submit" class="btn btn-primary px-4 fw-bold">
+                        <i class="bi bi-check2-circle me-2"></i>Save All Changes
+                    </button>
+                </div>
+                </form> <!-- End Main Form -->
             </div>
         </div>
 
-        <!-- Danger Zone Card -->
-        <div class="col-md-4">
-            <div class="card shadow-sm border-0 border-danger">
-                <div class="card-header bg-danger text-white py-3">
-                    <h5 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Danger Zone</h5>
+        <!-- RIGHT COLUMN: Helpers & Danger -->
+        <div class="col-lg-4">
+
+            <!-- API Token -->
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-white py-3">
+                    <h6 class="mb-0 fw-bold text-dark"><i class="bi bi-shield-lock me-2 text-success"></i>API Access
+                    </h6>
                 </div>
                 <div class="card-body">
-                    <p>Clear all cached search results and library data. This action cannot be undone.</p>
+                    <p class="text-muted small mb-3">Authenticate external applications.</p>
+                    <label class="form-label fw-bold small text-uppercase text-muted">Bearer Token</label>
+                    <div class="input-group mb-2">
+                        <input type="password" class="form-control font-monospace bg-light" id="apiTokenField"
+                            value="{{ api_token }}" readonly>
+                        <button class="btn btn-outline-secondary" type="button" onclick="toggleTokenVisibility()">
+                            <i class="bi bi-eye" id="toggleIcon"></i>
+                        </button>
+                    </div>
+                    <button class="btn btn-outline-primary btn-sm w-100" onclick="copyToken()" id="copyBtn">
+                        <i class="bi bi-clipboard me-1"></i> Copy to Clipboard
+                    </button>
+                    <div class="form-text text-success text-center mt-2 invisible" id="copyMsg">Copied!</div>
+                </div>
+            </div>
+
+            <!-- Danger Zone -->
+            <div class="card shadow-sm border-0 border-top border-danger border-4">
+                <div class="card-body">
+                    <h6 class="fw-bold text-danger mb-3"><i class="bi bi-exclamation-octagon-fill me-2"></i>Danger Zone
+                    </h6>
+                    <p class="text-muted small mb-3">Irreversible actions that affect system data.</p>
+
                     <form action="/settings/flush" method="post"
-                        onsubmit="return confirm('Are you sure you want to wipe ALL metadata?');">
-                        <button type="submit" class="btn btn-outline-danger w-100">
-                            <i class="bi bi-trash"></i> Flush Redis Cache
+                        onsubmit="return confirm('Are you sure you want to wipe ALL metadata? This cannot be undone.');">
+                        <button type="submit" class="btn btn-outline-danger w-100 btn-sm">
+                            <i class="bi bi-trash me-2"></i>Flush Redis Cache
                         </button>
                     </form>
                 </div>
             </div>
+
+            <!-- Info -->
+            <div class="text-center mt-4 pt-4 border-top">
+                <small class="text-muted d-block">Audio Metadata Server</small>
+                <small class="text-muted font-monospace">v1.4-Modular</small>
+            </div>
+
         </div>
     </div>
 </div>
+
+<!-- HIDDEN FORMS FOR CLEARING KEYS (To allow independent clearing while keeping Main Form clean) -->
+<!-- Note: The main form handles saving. These forms are specific for the 'X' buttons which invoke a specific backend logic -->
+<!-- Actually, simpler approach: The 'X' buttons were inside the main form in original design. 
+     Here I put them inside the main form as well, but they need to submit to /settings/update with specific values. 
+     Wait, I can't nest forms. 
+     Solution: Use 'form' attribute on buttons to link to separate hidden forms, OR keep them in main form line.
+     HTML5 'form' attribute allows buttos outside form. 
+     Let's create hidden forms for the Clear actions.
+-->
+
+<form id="clearGoogle" action="/settings/update" method="post">
+    <input type="hidden" name="preserve_settings" value="true">
+    <input type="hidden" name="clear_google_books_api_key" value="true">
+</form>
+
+<form id="clearPRH" action="/settings/update" method="post">
+    <input type="hidden" name="preserve_settings" value="true">
+    <input type="hidden" name="clear_prh_api_key" value="true">
+</form>
+
+<form id="clearHardcover" action="/settings/update" method="post">
+    <input type="hidden" name="preserve_settings" value="true">
+    <input type="hidden" name="clear_hardcover_api_key" value="true">
+</form>
 
 <script>
     function toggleTokenVisibility() {
         const field = document.getElementById("apiTokenField");
         const icon = document.getElementById("toggleIcon");
-
         if (field.type === "password") {
             field.type = "text";
             icon.classList.remove("bi-eye");
@@ -267,34 +319,13 @@
 
     function copyToken() {
         const field = document.getElementById("apiTokenField");
-
-        // Select and Copy
         field.select();
-        field.setSelectionRange(0, 99999); // For mobile devices
+        field.setSelectionRange(0, 99999);
         navigator.clipboard.writeText(field.value);
 
-        // Show Feedback
         const msg = document.getElementById("copyMsg");
-        const btn = document.getElementById("copyBtn");
-
-        msg.style.visibility = "visible";
-        msg.className = "form-text text-success fw-bold"; // Change to success color
-
-        // Reset button text temporarily
-        const originalHtml = btn.innerHTML;
-        btn.innerHTML = '<i class="bi bi-check"></i> Copied';
-        btn.classList.remove("btn-primary");
-        btn.classList.add("btn-success");
-
-        setTimeout(() => {
-            msg.style.visibility = "hidden";
-            btn.innerHTML = originalHtml;
-            btn.classList.remove("btn-success");
-            btn.classList.add("btn-primary");
-        }, 2000);
+        msg.classList.remove("invisible");
+        setTimeout(() => msg.classList.add("invisible"), 2000);
     }
 </script>
-
-
-
 {% endblock %}

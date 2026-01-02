@@ -24,10 +24,13 @@ This server sits between your mobile app/media server and external data sources.
 ## Interface
 
 <p align="center">
-  <img src="screenshots/listsCharts.png" width="48%" alt="Lists and Charts Import">
+  <img src="screenshots/dashboard.png" width="48%" alt="Lists and Charts Import">
   <img src="screenshots/trafficStatistics.png" width="48%" alt="Traffic and Device Statistics">
 </p>
-
+<p align="center">
+  <img src="screenshots/DatabaseViewer.png" width="48%" alt="Lists and Charts Import">
+  <img src="screenshots/listsCharts.png" width="48%" alt="Lists and Charts Import">
+</p>
 ---
 
 ## Getting Started
@@ -99,6 +102,8 @@ If you lose your admin password, you can reset it by accessing the server's file
 *   **Lists:** Import public URLs from Goodreads or Audible to bulk-populate your library.
 *   **Traffic:** View distinct devices (IPs), geolocation (Countries), and response time latency.
 *   **Settings:** Enable/Disable specific providers (e.g., turn off iTunes if you don't want it) and wipe the cache.
+*   **Database:** Direct MongoDB inspector with dynamic table view and JSON query support.
+*   **Documentation:** In-app integration guide and API reference.
 
 ---
 

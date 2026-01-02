@@ -121,13 +121,13 @@
 
             <ul class="list-unstyled components">
                 <li>
-                    <a href="/search_ui" class="nav-link {% if active_page == 'search' %}active{% endif %}">
-                        <i class="bi bi-search me-2"></i> Search
+                    <a href="/dashboard" class="nav-link {% if active_page == 'dashboard' %}active{% endif %}">
+                        <i class="bi bi-speedometer2 me-2"></i> Dashboard
                     </a>
                 </li>
                 <li>
-                    <a href="/dashboard" class="nav-link {% if active_page == 'dashboard' %}active{% endif %}">
-                        <i class="bi bi-speedometer2 me-2"></i> Dashboard
+                    <a href="/search_ui" class="nav-link {% if active_page == 'search' %}active{% endif %}">
+                        <i class="bi bi-search me-2"></i> Search
                     </a>
                 </li>
                 <li>
@@ -136,15 +136,20 @@
                     </a>
                 </li>
                 <li>
-                    <a href="/detail_view" class="{% if active_page == 'detail_view' %}active{% endif %}">
-                        <i class="bi bi-layout-text-window-reverse"></i> Detail View
-                    </a>
-                </li>
-                <li>
                     <a href="/lists" class="{% if active_page == 'lists' %}active{% endif %}">
                         <i class="bi bi-list-check"></i> Collections
                     </a>
                 </li>
+                <li>
+                    <a href="/detail_view" class="{% if active_page == 'detail_view' %}active{% endif %}">
+                        <i class="bi bi-layout-text-window-reverse"></i> Detail View
+                    </a>
+                </li>
+
+                <li>
+                    <hr class="dropdown-divider bg-light opacity-25 my-2">
+                </li>
+
                 <li>
                     <a href="/stats" class="nav-link {% if active_page == 'stats' %}active{% endif %}">
                         <i class="bi bi-people me-2"></i> Traffic & Devices
@@ -157,8 +162,12 @@
                 </li>
 
                 <li>
-                    <a href="/settings" class="{% if active_page == 'settings' %}active{% endif %}">
-                        <i class="bi bi-gear"></i> Settings
+                    <hr class="dropdown-divider bg-light opacity-25 my-2">
+                </li>
+
+                <li>
+                    <a href="/database" class="nav-link {% if active_page == 'database' %}active{% endif %}">
+                        <i class="bi bi-database me-2"></i> Database
                     </a>
                 </li>
                 <li>
@@ -167,8 +176,8 @@
                     </a>
                 </li>
                 <li>
-                    <a href="/database" class="nav-link {% if active_page == 'database' %}active{% endif %}">
-                        <i class="bi bi-database me-2"></i> Database
+                    <a href="/settings" class="{% if active_page == 'settings' %}active{% endif %}">
+                        <i class="bi bi-gear"></i> Settings
                     </a>
                 </li>
                 <li>
@@ -176,6 +185,11 @@
                         <i class="bi bi-file-earmark-code me-2"></i> Documentation
                     </a>
                 </li>
+
+                <li>
+                    <hr class="dropdown-divider bg-light opacity-25 my-2">
+                </li>
+
                 <li>
                     <a href="/logout" class="nav-link text-danger">
                         <i class="bi bi-box-arrow-right me-2"></i> Logout

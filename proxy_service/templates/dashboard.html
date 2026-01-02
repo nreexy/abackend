@@ -1,62 +1,137 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2>Dashboard</h2>
-        <span class="badge bg-secondary">Server: Online</span>
-    </div>
-
-    <!-- Stats Row -->
-    <div class="row mb-4">
-        <div class="col-md-4">
-            <div class="card text-center p-3 shadow-sm border-0">
-                <h2 class="display-6">{{ stats.total }}</h2>
-                <small class="text-muted">Total Requests</small>
-            </div>
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-5">
+        <div>
+            <h2 class="fw-bold m-0 text-dark">Dashboard</h2>
+            <p class="text-muted m-0 small">Overview & Real-time Metrics</p>
         </div>
-        <div class="col-md-4">
-            <div class="card text-center p-3 shadow-sm border-0">
-                <h2 class="display-6 text-success"><i class="bi bi-check-circle"></i></h2>
-                <small class="text-muted">Audible Status</small>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card text-center p-3 shadow-sm border-0">
-                <h2 class="display-6 text-primary">US</h2>
-                <small class="text-muted">Region</small>
-            </div>
+        <div>
+            <span class="badge bg-success-subtle text-success border border-success px-3 py-2 rounded-pill">
+                <i class="bi bi-circle-fill small me-2"></i>System Online
+            </span>
         </div>
     </div>
 
-    <div class="row">
-        <!-- Top Books -->
-        <div class="col-lg-6 mb-4">
-            <div class="card shadow-sm border-0">
-                <div class="card-header bg-white py-3">
-                    <h5 class="mb-0">📚 Most Popular Books</h5>
+    <!-- KPI Cards -->
+    <div class="row g-4 mb-5">
+        <!-- Card 1: Books -->
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #0d6efd !important;">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-uppercase text-muted small fw-bold mb-1">Cached Books</h6>
+                            <h2 class="display-6 fw-bold mb-0 text-dark">{{ stats.total_books }}</h2>
+                        </div>
+                        <div class="bg-primary bg-opacity-10 p-3 rounded-circle text-primary">
+                            <i class="bi bi-collection fs-4"></i>
+                        </div>
+                    </div>
                 </div>
-                <div class="card-body p-0">
-                    <table class="table table-hover mb-0">
-                        <thead class="table-light">
+            </div>
+        </div>
+
+        <!-- Card 2: Requests -->
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #198754 !important;">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-uppercase text-muted small fw-bold mb-1">Total Requests</h6>
+                            <h2 class="display-6 fw-bold mb-0 text-dark">{{ stats.total_requests }}</h2>
+                        </div>
+                        <div class="bg-success bg-opacity-10 p-3 rounded-circle text-success">
+                            <i class="bi bi-graph-up-arrow fs-4"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 3: Lists -->
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #6f42c1 !important;">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-uppercase text-muted small fw-bold mb-1">Imported Lists</h6>
+                            <h2 class="display-6 fw-bold mb-0 text-dark">{{ stats.total_lists }}</h2>
+                        </div>
+                        <div class="bg-purple bg-opacity-10 p-3 rounded-circle"
+                            style="color: #6f42c1; background-color: rgba(111, 66, 193, 0.1);">
+                            <i class="bi bi-list-stars fs-4"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 4: Visitors -->
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #fd7e14 !important;">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-uppercase text-muted small fw-bold mb-1">Unique Clients</h6>
+                            <h2 class="display-6 fw-bold mb-0 text-dark">{{ stats.total_visitors }}</h2>
+                        </div>
+                        <div class="bg-warning bg-opacity-10 p-3 rounded-circle text-warning">
+                            <i class="bi bi-people fs-4"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Split -->
+    <div class="row g-4">
+        <!-- Top Requested Books -->
+        <div class="col-lg-8">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 fw-bold text-dark"><i class="bi bi-fire text-danger me-2"></i>Trending Content</h6>
+                    <a href="/stats" class="text-decoration-none small">View All Stats &rarr;</a>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light text-muted small text-uppercase">
                             <tr>
-                                <th class="ps-4">Count</th>
-                                <th>Details</th>
+                                <th class="ps-4 py-3">Rank</th>
+                                <th class="py-3">Title / Author</th>
+                                <th class="py-3 text-end pe-4">Requests</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for book in stats.top_books %}
                             <tr>
-                                <td class="ps-4 fw-bold">{{ book.count }}</td>
+                                <td class="ps-4 text-muted fw-bold">#{{ loop.index }}</td>
                                 <td>
-                                    <div class="fw-bold text-truncate" style="max-width: 250px;">{{ book.title or
-                                        'Unknown' }}</div>
-                                    <small class="text-muted">{{ book._id }}</small>
+                                    <div class="fw-bold text-dark">{{ book.title or book._id }}</div>
+                                    <div class="small text-muted">
+                                        {% if book.authors %}
+                                        {{ book.authors|join(", ") }}
+                                        {% else %}
+                                        <span class="fst-italic text-muted">Unknown Author</span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="small text-muted font-monospace mt-1" style="font-size: 0.75rem;">{{
+                                        book._id }}</div>
+                                </td>
+                                <td class="text-end pe-4">
+                                    <span class="badge bg-light text-dark border rounded-pill px-3">{{ book.count
+                                        }}</span>
                                 </td>
                             </tr>
                             {% else %}
                             <tr>
-                                <td colspan="2" class="p-4 text-center">No data yet.</td>
+                                <td colspan="3" class="text-center py-5 text-muted">
+                                    <i class="bi bi-inbox fs-1 d-block mb-3"></i>
+                                    No trending data available yet.
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -65,39 +140,48 @@
             </div>
         </div>
 
-        <!-- Recent Logs -->
-        <div class="col-lg-6 mb-4">
-            <div class="card shadow-sm border-0">
+        <!-- Recent Activity Feed -->
+        <div class="col-lg-4">
+            <div class="card shadow-sm border-0 h-100">
                 <div class="card-header bg-white py-3">
-                    <h5 class="mb-0">📝 Recent Activity</h5>
+                    <h6 class="mb-0 fw-bold text-dark"><i class="bi bi-activity text-primary me-2"></i>Recent Activity
+                    </h6>
                 </div>
                 <div class="card-body p-0">
-                    <table class="table table-striped mb-0" style="font-size: 0.9rem;">
-                        <thead class="table-light">
-                            <tr>
-                                <th class="ps-3">Time</th>
-                                <th>Action</th>
-                                <th>Details</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for log in stats.recent_logs %}
-                            <tr>
-                                <td class="ps-3">{{ log.timestamp.strftime('%H:%M:%S') }}</td>
-                                <td>
-                                    {% if log.action == 'search' %}
-                                    <span class="badge bg-primary">Search</span>
-                                    {% else %}
-                                    <span class="badge bg-success">Fetch</span>
-                                    {% endif %}
-                                </td>
-                                <td class="text-truncate" style="max-width: 200px;">
-                                    {{ log.details or log.target }}
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                    <div class="list-group list-group-flush">
+                        {% for log in stats.recent_logs %}
+                        <div class="list-group-item px-4 py-3 border-bottom-0">
+                            <div class="d-flex w-100 justify-content-between mb-1">
+                                <small class="text-muted fw-bold" style="font-size: 0.75rem;">{{
+                                    log.timestamp.strftime('%H:%M:%S') }}</small>
+
+                                {% if log.action == 'search' %}
+                                <span class="badge bg-primary-subtle text-primary rounded-pill"
+                                    style="font-size: 0.7rem;">SEARCH</span>
+                                {% elif log.action == 'fetch_metadata' %}
+                                <span class="badge bg-success-subtle text-success rounded-pill"
+                                    style="font-size: 0.7rem;">FETCH</span>
+                                {% else %}
+                                <span class="badge bg-secondary-subtle text-secondary rounded-pill"
+                                    style="font-size: 0.7rem;">{{ log.action|upper }}</span>
+                                {% endif %}
+                            </div>
+                            <p class="mb-1 text-dark small text-truncate" title="{{ log.details or log.target }}">
+                                {{ log.details or log.target or "System Action" }}
+                            </p>
+                            <small class="text-muted" style="font-size: 0.75rem;">
+                                Client: {{ log.ip or "Internal" }}
+                            </small>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-5 text-muted">
+                            <small>No recent logs.</small>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="card-footer bg-white text-center py-2 border-top-0">
+                    <a href="/logs" class="text-decoration-none small text-muted">View System Logs</a>
                 </div>
             </div>
         </div>

@@ -329,18 +329,22 @@ async def get_detailed_stats():
     return {"aggregated": stats, "recent": recent}
 
 async def get_dashboard_stats():
+    # 1. Basic Counts
     total_requests = await logs_collection.count_documents({})
-    
-    # PIPELINE:
-    # 1. Filter for fetch actions
-    # 2. Group by ASIN (target)
-    # 3. Sort by popularity
-    # 4. Join with 'books' collection to get the real Title
+    books_count = await books_collection.count_documents({})
+    lists_count = await lists_collection.count_documents({})
+
+    # 2. Unique Visitors (Simple approximation via distinct IP)
+    # Note: On large datasets, distinct can be slow. For now it's fine.
+    unique_ips = await logs_collection.distinct("ip")
+    total_visitors = len(unique_ips)
+
+    # 3. Top Books Pipeline
     pipeline = [
         {"$match": {"action": "fetch_metadata"}},
         {"$group": {"_id": "$target", "count": {"$sum": 1}}},
         {"$sort": {"count": -1}},
-        {"$limit": 10},
+        {"$limit": 8}, # Limit to top 8 for UI
         # Join with books to get real title
         {"$lookup": {
             "from": "books",
@@ -352,15 +356,24 @@ async def get_dashboard_stats():
         {"$project": {
             "_id": 1, 
             "count": 1,
-            "title": {"$ifNull": [{"$arrayElemAt": ["$book_info.title", 0]}, "$_id"]}
+            "title": {"$ifNull": [{"$arrayElemAt": ["$book_info.title", 0]}, "$_id"]},
+            "authors": {"$ifNull": [{"$arrayElemAt": ["$book_info.authors", 0]}, []]} # Get authors for UI
         }}
     ]
     
-    top_books = await logs_collection.aggregate(pipeline).to_list(length=10)
+    top_books = await logs_collection.aggregate(pipeline).to_list(length=8)
     
-    recent_logs = await logs_collection.find().sort("timestamp", -1).limit(20).to_list(length=20)
+    # 4. Recent Activity
+    recent_logs = await logs_collection.find().sort("timestamp", -1).limit(10).to_list(length=10)
 
-    return {"total": total_requests, "top_books": top_books, "recent_logs": recent_logs}
+    return {
+        "total_requests": total_requests, 
+        "total_books": books_count,
+        "total_lists": lists_count,
+        "total_visitors": total_visitors,
+        "top_books": top_books, 
+        "recent_logs": recent_logs
+    }
 # --- LISTS LOGIC ---
 
 async def save_imported_list(name: str, url: str, asins: list, source: str = "Audible"):
