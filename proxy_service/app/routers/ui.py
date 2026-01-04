@@ -256,7 +256,7 @@ async def update_settings(
             "hardcover": prov_hardcover
         }
         # Don't overwrite key with None if not in this form
-        await save_system_settings(providers, limit, scrape_limit, google_books_api_key=None, prh_api_key=None, hardcover_api_key=None)
+        await save_system_settings(providers, limit, scrape_limit, google_books_api_key=google_books_api_key, prh_api_key=prh_api_key, hardcover_api_key=hardcover_api_key)
 
     return RedirectResponse(url="/settings?saved=true", status_code=303)
 
