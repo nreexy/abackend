@@ -28,6 +28,7 @@ from app.database import (
     get_collection_names,
     execute_admin_query
 )
+from app.security import LoginGuard
 from app.limiter import limiter
 
 router = APIRouter()
@@ -94,12 +95,18 @@ async def login_page(request: Request):
 @router.post("/login")
 @limiter.limit("5/minute")
 async def login(request: Request, response: Response, username: str = Form(...), password: str = Form(...)):
+    # 0. Check Ban Status
+    await LoginGuard.check_ban(request)
+
     active_hash = await get_active_password_hash()
     
     if not active_hash:
         return RedirectResponse(url="/setup", status_code=303)
 
     if username == ADMIN_USERNAME and verify_password(password, active_hash):
+        # Success -> Reset Fail Count
+        await LoginGuard.reset(request)
+        
         # Create Token
         access_token = create_access_token(data={"sub": username})
         # Set Cookie (HttpOnly)
@@ -115,6 +122,7 @@ async def login(request: Request, response: Response, username: str = Form(...),
         )
         return resp
     else:
+        await LoginGuard.record_failure(request)
         return templates.TemplateResponse("login.html", {"request": request, "error": "Invalid Username or Password"})
 
 @router.get("/logout")
@@ -221,12 +229,14 @@ async def update_settings(
     google_books_api_key: str = Form(None),
     prh_api_key: str = Form(None),
     hardcover_api_key: str = Form(None),
+    static_api_key: str = Form(None), # <--- NEW
     prov_hardcover: bool = Form(False),
     preserve_settings: bool = Form(False),
     # Clear Flags
     clear_google_books_api_key: bool = Form(False),
     clear_prh_api_key: bool = Form(False),
-    clear_hardcover_api_key: bool = Form(False)
+    clear_hardcover_api_key: bool = Form(False),
+    clear_static_api_key: bool = Form(False) # <--- NEW
 ):
     if not await check_ui_auth(request): return RedirectResponse("/login")
 
@@ -241,9 +251,10 @@ async def update_settings(
         if clear_google_books_api_key: google_books_api_key = ""
         if clear_prh_api_key: prh_api_key = ""
         if clear_hardcover_api_key: hardcover_api_key = ""
+        if clear_static_api_key: static_api_key = ""
 
         # Only update the key
-        await save_system_settings(providers, search_limit, scrape_limit_pages, google_books_api_key, prh_api_key, hardcover_api_key)
+        await save_system_settings(providers, search_limit, scrape_limit_pages, google_books_api_key, prh_api_key, hardcover_api_key, static_api_key)
         
     else:
         # Main settings form update
@@ -256,7 +267,7 @@ async def update_settings(
             "hardcover": prov_hardcover
         }
         # Don't overwrite key with None if not in this form
-        await save_system_settings(providers, limit, scrape_limit, google_books_api_key=google_books_api_key, prh_api_key=prh_api_key, hardcover_api_key=hardcover_api_key)
+        await save_system_settings(providers, limit, scrape_limit, google_books_api_key=google_books_api_key, prh_api_key=prh_api_key, hardcover_api_key=hardcover_api_key, static_api_key=static_api_key)
 
     return RedirectResponse(url="/settings?saved=true", status_code=303)
 

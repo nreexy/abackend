@@ -26,7 +26,8 @@ def create_access_token(data: dict):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-from app.database import get_stored_password_hash, clear_stored_password_hash
+from app.database import get_stored_password_hash, clear_stored_password_hash, get_system_settings
+from app.security import LoginGuard
 
 # --- HELPER: Get Active Password Hash ---
 async def get_active_password_hash():
@@ -102,15 +103,17 @@ async def get_current_user(request: Request):
     Checks for a valid token in:
     1. The 'Authorization' Header (API usage)
     2. The 'access_token' Cookie (Browser usage)
+    3. STATIC API KEY Check
     """
     
     # 0. Check if system is initialized
     active_hash = await get_active_password_hash()
     if not active_hash:
         # System is not initialized (no password set)
-        # We raise a special error or just 401. 
-        # The UI router will handle redirection to /setup if needed.
         raise HTTPException(status_code=401, detail="System not initialized")
+
+    # 0b. Check Ban Status (Fail2Ban Style)
+    await LoginGuard.check_ban(request)
 
     token = None
     
@@ -118,12 +121,20 @@ async def get_current_user(request: Request):
     auth_header = request.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header.split(" ")[1]
+        
+        # --- NEW: Check Static API Key ---
+        settings = await get_system_settings()
+        static_key = settings.get("static_api_key")
+        if static_key and token == static_key:
+            await LoginGuard.reset(request) # Success
+            return ADMIN_USERNAME
     
     # 2. Check Cookie (if no header)
     if not token:
         token = request.cookies.get("access_token")
 
     if not token:
+        # Don't record failure here - it just means user is not logged in yet
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
@@ -134,8 +145,12 @@ async def get_current_user(request: Request):
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username is None or username != ADMIN_USERNAME:
+            await LoginGuard.record_failure(request)
             raise HTTPException(status_code=401, detail="Invalid credentials")
+            
+        await LoginGuard.reset(request) # Success
     except JWTError:
+        await LoginGuard.record_failure(request)
         raise HTTPException(status_code=401, detail="Invalid token")
     
     return username

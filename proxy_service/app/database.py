@@ -183,14 +183,15 @@ DEFAULT_SETTINGS = {
     "scrape_limit_pages": 100,
     "google_books_api_key": os.getenv("GOOGLE_BOOKS_API_KEY", ""),
     "prh_api_key": os.getenv("PRH_API_KEY", ""),
-    "hardcover_api_key": os.getenv("HARDCOVER_API_KEY", "")
+    "hardcover_api_key": os.getenv("HARDCOVER_API_KEY", ""),
+    "static_api_key": None
 }
 
 async def get_system_settings():
     config = await settings_collection.find_one({"_id": "global_config"})
     return config if config else DEFAULT_SETTINGS
 
-async def save_system_settings(providers: dict, search_limit: int, scrape_limit_pages: int, google_books_api_key: str = None, prh_api_key: str = None, hardcover_api_key: str = None):
+async def save_system_settings(providers: dict, search_limit: int, scrape_limit_pages: int, google_books_api_key: str = None, prh_api_key: str = None, hardcover_api_key: str = None, static_api_key: str = None):
     update_fields = {
         "providers": providers, 
         "search_limit": search_limit, 
@@ -207,6 +208,9 @@ async def save_system_settings(providers: dict, search_limit: int, scrape_limit_
 
     if hardcover_api_key is not None:
         update_fields["hardcover_api_key"] = hardcover_api_key
+        
+    if static_api_key is not None:
+        update_fields["static_api_key"] = static_api_key
 
     await settings_collection.update_one(
         {"_id": "global_config"},

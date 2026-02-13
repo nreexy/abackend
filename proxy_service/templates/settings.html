@@ -251,6 +251,34 @@
                 </div>
             </div>
 
+            <!-- Static API Key -->
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-white py-3">
+                    <h6 class="mb-0 fw-bold text-dark"><i class="bi bi-key-fill me-2 text-primary"></i>Static API Key</h6>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">Permanent key for scripts & automations.</p>
+                    
+                    <form action="/settings/update" method="post">
+                        <input type="hidden" name="preserve_settings" value="true">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small text-uppercase text-muted">Key Value</label>
+                            <div class="input-group">
+                                <input type="password" class="form-control" name="static_api_key" 
+                                    value="{{ config.static_api_key or '' }}" placeholder="Set a static key...">
+                                <button class="btn btn-outline-primary" type="submit">Save</button>
+                                {% if config.static_api_key %}
+                                <button class="btn btn-outline-danger" type="submit" form="clearStaticKey" title="Clear">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                                {% endif %}
+                            </div>
+                            <div class="form-text small">This key does not expire. Keep it secret.</div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
             <!-- Danger Zone -->
             <div class="card shadow-sm border-0 border-top border-danger border-4">
                 <div class="card-body">
@@ -300,6 +328,11 @@
 <form id="clearHardcover" action="/settings/update" method="post">
     <input type="hidden" name="preserve_settings" value="true">
     <input type="hidden" name="clear_hardcover_api_key" value="true">
+</form>
+
+<form id="clearStaticKey" action="/settings/update" method="post">
+    <input type="hidden" name="preserve_settings" value="true">
+    <input type="hidden" name="clear_static_api_key" value="true">
 </form>
 
 <script>
