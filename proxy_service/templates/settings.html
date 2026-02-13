@@ -385,8 +385,18 @@
                 </div>
             </div>
             <div class="card shadow-sm border-0 mb-4">
-                <div class="card-header bg-white py-2">
+                <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
                     <small class="text-muted"><i class="bi bi-info-circle me-1"></i>Shows last 200 raw requests.</small>
+                    <div>
+                        <a href="/settings/logs/download" class="btn btn-outline-primary btn-sm me-1"
+                            title="Download All Logs (CSV)">
+                            <i class="bi bi-download me-1"></i>Download CSV
+                        </a>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="window.location.reload()"
+                            title="Refresh Logs">
+                            <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+                        </button>
+                    </div>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-sm table-hover align-middle mb-0 font-monospace"

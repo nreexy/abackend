@@ -2,7 +2,7 @@ from typing import Optional # <--- FIXED: Added this import
 from urllib.parse import urlencode
 import json
 from fastapi import APIRouter, Request, Form, Depends, HTTPException, status, Response
-from fastapi.responses import RedirectResponse, HTMLResponse
+from starlette.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
 # Auth Logic
@@ -27,7 +27,8 @@ from app.database import (
     set_cache,
     get_collection_names,
     execute_admin_query,
-    get_access_logs # <--- NEW
+    get_access_logs, 
+    access_logs_collection # <--- Import this
 )
 from app.security import LoginGuard
 from app.limiter import limiter
@@ -372,8 +373,32 @@ async def view_system_logs(request: Request):
     if not await check_ui_auth(request): return RedirectResponse("/login")
     return RedirectResponse(url="/settings#logs", status_code=303)
 
-@router.get("/stats")
-async def view_traffic_stats(request: Request):
+@router.get("/settings/logs/download")
+async def download_access_logs(request: Request):
+    if not await check_ui_auth(request): return RedirectResponse("/login")
+    
+    async def iter_csv():
+        # Header
+        yield "Timestamp,Status,Method,Path,IP,Duration(ms),UserAgent\n"
+        
+        # Stream all logs (newest first)
+        cursor = access_logs_collection.find().sort("timestamp", -1)
+        async for log in cursor:
+            ts = log.get("timestamp", "").isoformat() if log.get("timestamp") else ""
+            status = str(log.get("status_code", ""))
+            method = log.get("method", "")
+            path = f"{log.get('path', '')}?{log.get('query', '')}"
+            ip = log.get("ip", "")
+            dur = str(log.get("duration_ms", ""))
+            ua = log.get("user_agent", "").replace(",", ";") # Simple CSV escape
+            
+            yield f"{ts},{status},{method},{path},{ip},{dur},{ua}\n"
+
+    return StreamingResponse(
+        iter_csv(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=access_logs.csv"}
+    )
     if not await check_ui_auth(request): return RedirectResponse("/login")
     
     from app.database import get_traffic_stats

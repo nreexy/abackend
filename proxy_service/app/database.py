@@ -385,7 +385,8 @@ async def get_dashboard_stats():
     # 1. Basic Counts
     total_requests = await logs_collection.count_documents({})
     books_count = await books_collection.count_documents({})
-    lists_count = await lists_collection.count_documents({})
+    # lists_count = await lists_collection.count_documents({}) # Unused
+    ping_count = await access_logs_collection.count_documents({"path": "/ping"})
 
     # 2. Unique Visitors (Simple approximation via distinct IP)
     # Note: On large datasets, distinct can be slow. For now it's fine.
@@ -416,16 +417,12 @@ async def get_dashboard_stats():
     
     top_books = await logs_collection.aggregate(pipeline).to_list(length=8)
     
-    # 4. Recent Activity
-    recent_logs = await logs_collection.find().sort("timestamp", -1).limit(10).to_list(length=10)
-
     return {
         "total_requests": total_requests, 
         "total_books": books_count,
-        "total_lists": lists_count,
+        "total_pings": ping_count,
         "total_visitors": total_visitors,
-        "top_books": top_books, 
-        "recent_logs": recent_logs
+        "top_books": top_books
     }
 # --- LISTS LOGIC ---
 

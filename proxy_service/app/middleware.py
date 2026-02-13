@@ -20,14 +20,24 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
             process_time = (time.time() - start_time) * 1000
             
             # Extract details
-            client_ip = request.client.host if request.client else "Unknown"
+            # FIX: Handle Reverse Proxy (Nginx/Docker) IPs
+            forwarded_for = request.headers.get("x-forwarded-for")
+            real_ip = request.headers.get("x-real-ip")
+            
+            if forwarded_for:
+                # X-Forwarded-For: <client>, <proxy1>, <proxy2>
+                client_ip = forwarded_for.split(",")[0].strip()
+            elif real_ip:
+                client_ip = real_ip
+            else:
+                client_ip = request.client.host if request.client else "Unknown"
             method = request.method
             path = request.url.path
             query = request.url.query
             user_agent = request.headers.get("user-agent", "Unknown")
             
             # Filter out health checks to avoid noise
-            if path not in ["/ping", "/metrics", "/favicon.ico"]:
+            if path not in ["/metrics", "/favicon.ico"]:
                 await log_request_access({
                     "timestamp": datetime.datetime.utcnow(),
                     "ip": client_ip,
