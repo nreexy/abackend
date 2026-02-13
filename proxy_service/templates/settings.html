@@ -45,12 +45,12 @@
         <li class="nav-item" role="presentation">
             <button class="nav-link px-4 fw-bold" id="logs-tab" data-bs-toggle="pill" data-bs-target="#logs"
                 type="button" role="tab" aria-controls="logs" aria-selected="false"><i
-                    class="bi bi-journal-text me-2"></i>Logs</button>
+                    class="bi bi-journal-text me-2"></i>System Logs</button>
         </li>
         <li class="nav-item" role="presentation">
             <button class="nav-link px-4 fw-bold" id="security-tab" data-bs-toggle="pill" data-bs-target="#security"
                 type="button" role="tab" aria-controls="security" aria-selected="false"><i
-                    class="bi bi-shield-check me-2"></i>Security</button>
+                    class="bi bi-shield-check me-2"></i>Access Logs</button>
         </li>
         <li class="nav-item" role="presentation">
             <button class="nav-link px-4 fw-bold text-danger" id="danger-tab" data-bs-toggle="pill"
@@ -387,10 +387,34 @@
             <div class="card shadow-sm border-0 mb-4">
                 <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
                     <small class="text-muted"><i class="bi bi-info-circle me-1"></i>Shows last 200 raw requests.</small>
-                    <div>
-                        <a href="/settings/logs/download" class="btn btn-outline-primary btn-sm me-1"
+                    <div class="d-flex gap-2">
+                        <!-- Filter Dropdown -->
+                        <div class="dropdown">
+                            <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button"
+                                id="statusFilterDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-funnel me-1"></i>Status: {{ current_status_filter or 'All' }}
+                            </button>
+                            <ul class="dropdown-menu" aria-labelledby="statusFilterDropdown">
+                                <li><a class="dropdown-item" href="#" onclick="applyStatusFilter('')">All</a></li>
+                                <li>
+                                    <hr class="dropdown-divider">
+                                </li>
+                                <li><a class="dropdown-item text-success" href="#" onclick="applyStatusFilter(200)">200
+                                        OK</a></li>
+                                <li><a class="dropdown-item text-danger" href="#" onclick="applyStatusFilter(401)">401
+                                        Unauthorized</a></li>
+                                <li><a class="dropdown-item text-danger" href="#" onclick="applyStatusFilter(403)">403
+                                        Forbidden</a></li>
+                                <li><a class="dropdown-item text-warning" href="#" onclick="applyStatusFilter(404)">404
+                                        Not Found</a></li>
+                                <li><a class="dropdown-item text-secondary" href="#"
+                                        onclick="applyStatusFilter(500)">500 Server Error</a></li>
+                            </ul>
+                        </div>
+
+                        <a href="/settings/logs/download" class="btn btn-outline-primary btn-sm"
                             title="Download All Logs (CSV)">
-                            <i class="bi bi-download me-1"></i>Download CSV
+                            <i class="bi bi-download me-1"></i>CSV
                         </a>
                         <button class="btn btn-outline-secondary btn-sm" onclick="window.location.reload()"
                             title="Refresh Logs">
@@ -532,6 +556,39 @@
             const msg = document.getElementById("copyMsg");
             msg.classList.remove("invisible");
             setTimeout(() => msg.classList.add("invisible"), 2000);
+        }
+
+        // --- Tab Persistence & Filtering ---
+        document.addEventListener("DOMContentLoaded", function () {
+            // 1. Activate tab from Hash
+            const hash = window.location.hash;
+            if (hash) {
+                const triggerEl = document.querySelector(`#settingsTabs button[data-bs-target="${hash}"]`);
+                if (triggerEl) {
+                    const tab = new bootstrap.Tab(triggerEl);
+                    tab.show();
+                }
+            }
+
+            // 2. Update Hash on Click
+            const tabEls = document.querySelectorAll('button[data-bs-toggle="pill"]');
+            tabEls.forEach(tabEl => {
+                tabEl.addEventListener('shown.bs.tab', function (event) {
+                    const targetId = event.target.getAttribute('data-bs-target');
+                    history.pushState(null, null, targetId);
+                });
+            });
+        });
+
+        function applyStatusFilter(status) {
+            const url = new URL(window.location.href);
+            if (status) {
+                url.searchParams.set("status_filter", status);
+            } else {
+                url.searchParams.delete("status_filter");
+            }
+            url.hash = "#security"; // Ensure we stay on security tab
+            window.location.href = url.toString();
         }
     </script>
     {% endblock %}

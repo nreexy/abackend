@@ -1,3 +1,4 @@
+from typing import Optional
 import os
 import json
 import datetime
@@ -330,11 +331,15 @@ async def log_request_access(data: dict):
     # Optional: Cap collection size? For now, just insert.
     await access_logs_collection.insert_one(data)
 
-async def get_access_logs(limit: int = 100):
+async def get_access_logs(limit: int = 100, status_code: Optional[int] = None):
     """
     Fetches raw access logs for Security Tab.
     """
-    return await access_logs_collection.find().sort("timestamp", -1).limit(limit).to_list(length=limit)
+    query = {}
+    if status_code is not None:
+        query["status_code"] = status_code
+        
+    return await access_logs_collection.find(query).sort("timestamp", -1).limit(limit).to_list(length=limit)
 
 async def get_traffic_stats():
     total_requests = await logs_collection.count_documents({})

@@ -202,7 +202,7 @@ async def delete_book_action(request: Request, asin: str = Form(...)):
     return RedirectResponse(url="/library", status_code=303)
 
 @router.get("/settings")
-async def view_settings(request: Request):
+async def view_settings(request: Request, status_filter: Optional[int] = None):
     if not await check_ui_auth(request): return RedirectResponse("/login")
     
     config = await get_system_settings()
@@ -212,15 +212,16 @@ async def view_settings(request: Request):
     
     # FETCH LOGS
     system_logs = await get_system_logs(limit=200)
-    access_logs = await get_access_logs(limit=200)
+    access_logs = await get_access_logs(limit=200, status_code=status_filter)
     
     return templates.TemplateResponse("settings.html", {
         "request": request, 
         "config": config, 
         "active_page": "settings",
         "api_token": token,
-        "system_logs": system_logs, # <--- Pass logs
-        "access_logs": access_logs  # <--- Pass security logs
+        "system_logs": system_logs, 
+        "access_logs": access_logs,
+        "current_status_filter": status_filter
     })
 
 
@@ -399,6 +400,8 @@ async def download_access_logs(request: Request):
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=access_logs.csv"}
     )
+@router.get("/stats")
+async def view_stats(request: Request):
     if not await check_ui_auth(request): return RedirectResponse("/login")
     
     from app.database import get_traffic_stats
