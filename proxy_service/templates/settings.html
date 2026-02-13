@@ -25,51 +25,87 @@
     </div>
     {% endif %}
 
-    <div class="row g-4">
-        <!-- LEFT COLUMN: Main Configuration -->
-        <div class="col-lg-8">
+    <!-- Tabs Navigation -->
+    <ul class="nav nav-pills mb-4 gap-2" id="settingsTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active px-4 fw-bold" id="general-tab" data-bs-toggle="pill"
+                data-bs-target="#general" type="button" role="tab" aria-controls="general" aria-selected="true"><i
+                    class="bi bi-sliders me-2"></i>General</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link px-4 fw-bold" id="providers-tab" data-bs-toggle="pill" data-bs-target="#providers"
+                type="button" role="tab" aria-controls="providers" aria-selected="false"><i
+                    class="bi bi-plug me-2"></i>Metadata Providers</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link px-4 fw-bold" id="api-tab" data-bs-toggle="pill" data-bs-target="#api" type="button"
+                role="tab" aria-controls="api" aria-selected="false"><i class="bi bi-shield-lock me-2"></i>API
+                Access</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link px-4 fw-bold text-danger" id="danger-tab" data-bs-toggle="pill"
+                data-bs-target="#danger" type="button" role="tab" aria-controls="danger" aria-selected="false"><i
+                    class="bi bi-exclamation-octagon-fill me-2"></i>Danger Zone</button>
+        </li>
+    </ul>
 
-            <!-- Global Search Config -->
-            <div class="card shadow-sm border-0 mb-4">
-                <div class="card-header bg-white py-3">
-                    <h6 class="mb-0 fw-bold text-dark"><i class="bi bi-sliders me-2 text-primary"></i>System Limits</h6>
-                </div>
-                <div class="card-body">
-                    <form action="/settings/update" method="post" id="mainForm">
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <label for="limit" class="form-label fw-bold small text-uppercase text-muted">Search
-                                    Depth</label>
-                                <div class="input-group">
-                                    <span class="input-group-text bg-light border-end-0"><i
-                                            class="bi bi-search"></i></span>
-                                    <input type="number" class="form-control border-start-0 ps-0" id="limit"
-                                        name="limit" value="{{ config.search_limit }}" min="1" max="20">
-                                </div>
-                                <div class="form-text small">Max results per provider (1-20).</div>
-                            </div>
-                            <div class="col-md-6">
-                                <label for="scrape_limit"
-                                    class="form-label fw-bold small text-uppercase text-muted">Scrape Limit</label>
-                                <div class="input-group">
-                                    <span class="input-group-text bg-light border-end-0"><i
-                                            class="bi bi-cloud-download"></i></span>
-                                    <input type="number" class="form-control border-start-0 ps-0" id="scrape_limit"
-                                        name="scrape_limit" value="{{ config.scrape_limit_pages or 100 }}" min="1"
-                                        max="500">
-                                </div>
-                                <div class="form-text small">Max pages for list imports.</div>
-                            </div>
-                        </div>
+    <!-- Main Wrapper Form Definition (Hidden) -->
+    <!-- Inputs in General and Providers tabs will link to this via form="mainForm" -->
+    <form action="/settings/update" method="post" id="mainForm"></form>
+
+    <div class="tab-content" id="settingsTabsContent">
+
+        <!-- TAB 1: GENERAL -->
+        <div class="tab-pane fade show active" id="general" role="tabpanel" aria-labelledby="general-tab">
+            <div class="row section-header mb-3">
+                <div class="col-12">
+                    <h5 class="fw-bold text-dark border-bottom pb-2">System Limits</h5>
                 </div>
             </div>
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="limit" class="form-label fw-bold small text-uppercase text-muted">Search
+                                Depth</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light border-end-0"><i class="bi bi-search"></i></span>
+                                <input type="number" class="form-control border-start-0 ps-0" id="limit" name="limit"
+                                    value="{{ config.search_limit }}" min="1" max="20" form="mainForm">
+                            </div>
+                            <div class="form-text small">Max results per provider (1-20).</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="scrape_limit" class="form-label fw-bold small text-uppercase text-muted">Scrape
+                                Limit</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light border-end-0"><i
+                                        class="bi bi-cloud-download"></i></span>
+                                <input type="number" class="form-control border-start-0 ps-0" id="scrape_limit"
+                                    name="scrape_limit" value="{{ config.scrape_limit_pages or 100 }}" min="1" max="500"
+                                    form="mainForm">
+                            </div>
+                            <div class="form-text small">Max pages for list imports.</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer bg-light py-3">
+                    <button type="submit" class="btn btn-primary px-4 fw-bold" form="mainForm">
+                        <i class="bi bi-check2-circle me-2"></i>Save General Settings
+                    </button>
+                </div>
+            </div>
+        </div>
 
+        <!-- TAB 2: PROVIDERS -->
+        <div class="tab-pane fade" id="providers" role="tabpanel" aria-labelledby="providers-tab">
+            <div class="row section-header mb-3">
+                <div class="col-12">
+                    <h5 class="fw-bold text-dark border-bottom pb-2">Active Metadata Sources</h5>
+                </div>
+            </div>
             <!-- Provider Configuration (Unified) -->
             <div class="card shadow-sm border-0 mb-4">
-                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0 fw-bold text-dark"><i class="bi bi-plug me-2 text-primary"></i>Metadata Providers
-                    </h6>
-                </div>
                 <div class="card-body p-0">
                     <div class="list-group list-group-flush">
 
@@ -80,10 +116,11 @@
                                     <div class="form-check form-switch">
                                         <input class="form-check-input" type="checkbox" id="prov_audible"
                                             name="prov_audible" value="true" {% if config.providers.audible %}checked{%
-                                            endif %}>
+                                            endif %} form="mainForm">
                                         <label class="form-check-label fw-bold" for="prov_audible">Audible</label>
                                     </div>
-                                    <div class="small text-muted ms-5 ps-1">Chapters, Narrators, Series, Ratings</div>
+                                    <div class="small text-muted ms-5 ps-1">Chapters, Narrators, Series, Ratings
+                                    </div>
                                 </div>
                                 <span class="badge bg-warning text-dark border"><i
                                         class="bi bi-star-fill me-1"></i>Core</span>
@@ -97,11 +134,12 @@
                                     <div class="form-check form-switch">
                                         <input class="form-check-input" type="checkbox" id="prov_itunes"
                                             name="prov_itunes" value="true" {% if config.providers.itunes %}checked{%
-                                            endif %}>
+                                            endif %} form="mainForm">
                                         <label class="form-check-label fw-bold" for="prov_itunes">iTunes (Apple
                                             Books)</label>
                                     </div>
-                                    <div class="small text-muted ms-5 ps-1">High-Res Covers, Exact Release Dates</div>
+                                    <div class="small text-muted ms-5 ps-1">High-Res Covers, Exact Release Dates
+                                    </div>
                                 </div>
                                 <span class="badge bg-secondary-subtle text-secondary border">Public API</span>
                             </div>
@@ -114,7 +152,7 @@
                                     <div class="form-check form-switch">
                                         <input class="form-check-input" type="checkbox" id="prov_goodreads"
                                             name="prov_goodreads" value="true" {% if config.providers.goodreads
-                                            %}checked{% endif %}>
+                                            %}checked{% endif %} form="mainForm">
                                         <label class="form-check-label fw-bold" for="prov_goodreads">Goodreads</label>
                                     </div>
                                     <div class="small text-muted ms-5 ps-1">Community Ratings, Genres, List Imports
@@ -131,8 +169,9 @@
                                     <div class="form-check form-switch">
                                         <input class="form-check-input" type="checkbox" id="prov_google"
                                             name="prov_google" value="true" {% if config.providers.google %}checked{%
-                                            endif %}>
-                                        <label class="form-check-label fw-bold" for="prov_google">Google Books</label>
+                                            endif %} form="mainForm">
+                                        <label class="form-check-label fw-bold" for="prov_google">Google
+                                            Books</label>
                                     </div>
                                 </div>
                                 <span class="badge bg-primary-subtle text-primary border">API Key Req.</span>
@@ -143,7 +182,7 @@
                                     <span class="input-group-text bg-white text-muted">Key</span>
                                     <input type="password" class="form-control" name="google_books_api_key"
                                         value="{{ config.google_books_api_key or '' }}"
-                                        placeholder="Enter Google Books API Key">
+                                        placeholder="Enter Google Books API Key" form="mainForm">
                                     {% if config.google_books_api_key %}
                                     <button class="btn btn-outline-danger" type="submit" form="clearGoogle"
                                         title="Clear Key">
@@ -160,7 +199,8 @@
                                 <div>
                                     <div class="form-check form-switch">
                                         <input class="form-check-input" type="checkbox" id="prov_prh" name="prov_prh"
-                                            value="true" {% if config.providers.prh %}checked{% endif %}>
+                                            value="true" {% if config.providers.prh %}checked{% endif %}
+                                            form="mainForm">
                                         <label class="form-check-label fw-bold" for="prov_prh">Penguin Random
                                             House</label>
                                     </div>
@@ -171,7 +211,8 @@
                                 <div class="input-group input-group-sm">
                                     <span class="input-group-text bg-white text-muted">Key</span>
                                     <input type="password" class="form-control" name="prh_api_key"
-                                        value="{{ config.prh_api_key or '' }}" placeholder="Enter PRH API Key">
+                                        value="{{ config.prh_api_key or '' }}" placeholder="Enter PRH API Key"
+                                        form="mainForm">
                                     {% if config.prh_api_key %}
                                     <button class="btn btn-outline-danger" type="submit" form="clearPRH"
                                         title="Clear Key">
@@ -189,7 +230,7 @@
                                     <div class="form-check form-switch">
                                         <input class="form-check-input" type="checkbox" id="prov_hardcover"
                                             name="prov_hardcover" value="true" {% if config.providers.hardcover
-                                            %}checked{% endif %}>
+                                            %}checked{% endif %} form="mainForm">
                                         <label class="form-check-label fw-bold"
                                             for="prov_hardcover">Hardcover.app</label>
                                     </div>
@@ -203,7 +244,7 @@
                                     <span class="input-group-text bg-white text-muted">Key</span>
                                     <input type="password" class="form-control" name="hardcover_api_key"
                                         value="{{ config.hardcover_api_key or '' }}"
-                                        placeholder="Enter Hardcover Bearer Token">
+                                        placeholder="Enter Hardcover Bearer Token" form="mainForm">
                                     {% if config.hardcover_api_key %}
                                     <button class="btn btn-outline-danger" type="submit" form="clearHardcover"
                                         title="Clear Key">
@@ -217,22 +258,26 @@
                     </div>
                 </div>
                 <div class="card-footer bg-light py-3">
-                    <button type="submit" class="btn btn-primary px-4 fw-bold">
-                        <i class="bi bi-check2-circle me-2"></i>Save All Changes
+                    <button type="submit" class="btn btn-primary px-4 fw-bold" form="mainForm">
+                        <i class="bi bi-check2-circle me-2"></i>Save Providers
                     </button>
                 </div>
-                </form> <!-- End Main Form -->
             </div>
         </div>
 
-        <!-- RIGHT COLUMN: Helpers & Danger -->
-        <div class="col-lg-4">
-
+        <!-- TAB 3: API ACCESS -->
+        <div class="tab-pane fade" id="api" role="tabpanel" aria-labelledby="api-tab">
+            <div class="row section-header mb-3">
+                <div class="col-12">
+                    <h5 class="fw-bold text-dark border-bottom pb-2">Credentials & Authentication</h5>
+                </div>
+            </div>
             <!-- API Token -->
             <div class="card shadow-sm border-0 mb-4">
                 <div class="card-header bg-white py-3">
-                    <h6 class="mb-0 fw-bold text-dark"><i class="bi bi-shield-lock me-2 text-success"></i>API Access
-                    </h6>
+                    <h6 class="mb-0 fw-bold text-dark"><i class="bi bi-shield-lock me-2 text-success"></i>Current
+                        Session
+                        Token</h6>
                 </div>
                 <div class="card-body">
                     <p class="text-muted small mb-3">Authenticate external applications.</p>
@@ -254,21 +299,23 @@
             <!-- Static API Key -->
             <div class="card shadow-sm border-0 mb-4">
                 <div class="card-header bg-white py-3">
-                    <h6 class="mb-0 fw-bold text-dark"><i class="bi bi-key-fill me-2 text-primary"></i>Static API Key</h6>
+                    <h6 class="mb-0 fw-bold text-dark"><i class="bi bi-key-fill me-2 text-primary"></i>Static API Key
+                    </h6>
                 </div>
                 <div class="card-body">
                     <p class="text-muted small mb-3">Permanent key for scripts & automations.</p>
-                    
+
                     <form action="/settings/update" method="post">
                         <input type="hidden" name="preserve_settings" value="true">
                         <div class="mb-3">
                             <label class="form-label fw-bold small text-uppercase text-muted">Key Value</label>
                             <div class="input-group">
-                                <input type="password" class="form-control" name="static_api_key" 
+                                <input type="password" class="form-control" name="static_api_key"
                                     value="{{ config.static_api_key or '' }}" placeholder="Set a static key...">
                                 <button class="btn btn-outline-primary" type="submit">Save</button>
                                 {% if config.static_api_key %}
-                                <button class="btn btn-outline-danger" type="submit" form="clearStaticKey" title="Clear">
+                                <button class="btn btn-outline-danger" type="submit" form="clearStaticKey"
+                                    title="Clear">
                                     <i class="bi bi-x-lg"></i>
                                 </button>
                                 {% endif %}
@@ -278,13 +325,23 @@
                     </form>
                 </div>
             </div>
+        </div>
 
+        <!-- TAB 4: DANGER ZONE -->
+        <div class="tab-pane fade" id="danger" role="tabpanel" aria-labelledby="danger-tab">
+            <div class="row section-header mb-3">
+                <div class="col-12">
+                    <h5 class="fw-bold text-danger border-bottom pb-2">Destructive Actions</h5>
+                </div>
+            </div>
             <!-- Danger Zone -->
             <div class="card shadow-sm border-0 border-top border-danger border-4">
                 <div class="card-body">
-                    <h6 class="fw-bold text-danger mb-3"><i class="bi bi-exclamation-octagon-fill me-2"></i>Danger Zone
+                    <h6 class="fw-bold text-danger mb-3"><i class="bi bi-exclamation-octagon-fill me-2"></i>Flush Cache
                     </h6>
-                    <p class="text-muted small mb-3">Irreversible actions that affect system data.</p>
+                    <p class="text-muted small mb-3">Permanently delete all cached book metadata from Redis. The
+                        database
+                        will not be affected, but subsequent requests will trigger fresh fetches.</p>
 
                     <form action="/settings/flush" method="post"
                         onsubmit="return confirm('Are you sure you want to wipe ALL metadata? This cannot be undone.');">
@@ -294,20 +351,19 @@
                     </form>
                 </div>
             </div>
-
-            <!-- Info -->
-            <div class="text-center mt-4 pt-4 border-top">
-                <small class="text-muted d-block">Audio Metadata Server</small>
-                <small class="text-muted font-monospace">v1.4-Modular</small>
-            </div>
-
         </div>
-    </div>
-</div>
 
-<!-- HIDDEN FORMS FOR CLEARING KEYS (To allow independent clearing while keeping Main Form clean) -->
-<!-- Note: The main form handles saving. These forms are specific for the 'X' buttons which invoke a specific backend logic -->
-<!-- Actually, simpler approach: The 'X' buttons were inside the main form in original design. 
+    </div> <!-- End Tab Content -->
+
+    <div class="text-center mt-4 pt-4 border-top">
+        <small class="text-muted d-block">Audio Metadata Server</small>
+        <small class="text-muted font-monospace">v1.5-UI-Tabs</small>
+    </div>
+
+
+    <!-- HIDDEN FORMS FOR CLEARING KEYS (To allow independent clearing while keeping Main Form clean) -->
+    <!-- Note: The main form handles saving. These forms are specific for the 'X' buttons which invoke a specific backend logic -->
+    <!-- Actually, simpler approach: The 'X' buttons were inside the main form in original design. 
      Here I put them inside the main form as well, but they need to submit to /settings/update with specific values. 
      Wait, I can't nest forms. 
      Solution: Use 'form' attribute on buttons to link to separate hidden forms, OR keep them in main form line.
@@ -315,50 +371,50 @@
      Let's create hidden forms for the Clear actions.
 -->
 
-<form id="clearGoogle" action="/settings/update" method="post">
-    <input type="hidden" name="preserve_settings" value="true">
-    <input type="hidden" name="clear_google_books_api_key" value="true">
-</form>
+    <form id="clearGoogle" action="/settings/update" method="post">
+        <input type="hidden" name="preserve_settings" value="true">
+        <input type="hidden" name="clear_google_books_api_key" value="true">
+    </form>
 
-<form id="clearPRH" action="/settings/update" method="post">
-    <input type="hidden" name="preserve_settings" value="true">
-    <input type="hidden" name="clear_prh_api_key" value="true">
-</form>
+    <form id="clearPRH" action="/settings/update" method="post">
+        <input type="hidden" name="preserve_settings" value="true">
+        <input type="hidden" name="clear_prh_api_key" value="true">
+    </form>
 
-<form id="clearHardcover" action="/settings/update" method="post">
-    <input type="hidden" name="preserve_settings" value="true">
-    <input type="hidden" name="clear_hardcover_api_key" value="true">
-</form>
+    <form id="clearHardcover" action="/settings/update" method="post">
+        <input type="hidden" name="preserve_settings" value="true">
+        <input type="hidden" name="clear_hardcover_api_key" value="true">
+    </form>
 
-<form id="clearStaticKey" action="/settings/update" method="post">
-    <input type="hidden" name="preserve_settings" value="true">
-    <input type="hidden" name="clear_static_api_key" value="true">
-</form>
+    <form id="clearStaticKey" action="/settings/update" method="post">
+        <input type="hidden" name="preserve_settings" value="true">
+        <input type="hidden" name="clear_static_api_key" value="true">
+    </form>
 
-<script>
-    function toggleTokenVisibility() {
-        const field = document.getElementById("apiTokenField");
-        const icon = document.getElementById("toggleIcon");
-        if (field.type === "password") {
-            field.type = "text";
-            icon.classList.remove("bi-eye");
-            icon.classList.add("bi-eye-slash");
-        } else {
-            field.type = "password";
-            icon.classList.remove("bi-eye-slash");
-            icon.classList.add("bi-eye");
+    <script>
+        function toggleTokenVisibility() {
+            const field = document.getElementById("apiTokenField");
+            const icon = document.getElementById("toggleIcon");
+            if (field.type === "password") {
+                field.type = "text";
+                icon.classList.remove("bi-eye");
+                icon.classList.add("bi-eye-slash");
+            } else {
+                field.type = "password";
+                icon.classList.remove("bi-eye-slash");
+                icon.classList.add("bi-eye");
+            }
         }
-    }
 
-    function copyToken() {
-        const field = document.getElementById("apiTokenField");
-        field.select();
-        field.setSelectionRange(0, 99999);
-        navigator.clipboard.writeText(field.value);
+        function copyToken() {
+            const field = document.getElementById("apiTokenField");
+            field.select();
+            field.setSelectionRange(0, 99999);
+            navigator.clipboard.writeText(field.value);
 
-        const msg = document.getElementById("copyMsg");
-        msg.classList.remove("invisible");
-        setTimeout(() => msg.classList.add("invisible"), 2000);
-    }
-</script>
-{% endblock %}
+            const msg = document.getElementById("copyMsg");
+            msg.classList.remove("invisible");
+            setTimeout(() => msg.classList.add("invisible"), 2000);
+        }
+    </script>
+    {% endblock %}

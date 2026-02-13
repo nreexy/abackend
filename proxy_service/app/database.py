@@ -188,8 +188,27 @@ DEFAULT_SETTINGS = {
 }
 
 async def get_system_settings():
+    # 1. Try Cache
+    cache_key = "system_settings_cache"
+    cached = await redis_client.get(cache_key)
+    if cached:
+        return json.loads(cached)
+
+    # 2. Fetch DB
     config = await settings_collection.find_one({"_id": "global_config"})
-    return config if config else DEFAULT_SETTINGS
+    if not config:
+        config = DEFAULT_SETTINGS
+    
+    # 3. Set Cache (300s = 5 mins)
+    # Convert ObjectId to str if present (though settings usually don't have generated _id other than set string)
+    # using default serializer just in case
+    def json_serial(obj):
+        if isinstance(obj, (datetime.datetime, datetime.date)): return obj.isoformat()
+        raise TypeError(f"Type {type(obj)} not serializable")
+        
+    await redis_client.set(cache_key, json.dumps(config, default=json_serial), ex=300)
+    
+    return config
 
 async def save_system_settings(providers: dict, search_limit: int, scrape_limit_pages: int, google_books_api_key: str = None, prh_api_key: str = None, hardcover_api_key: str = None, static_api_key: str = None):
     update_fields = {
@@ -217,6 +236,9 @@ async def save_system_settings(providers: dict, search_limit: int, scrape_limit_
         {"$set": update_fields},
         upsert=True
     )
+    
+    # Invalidate Cache
+    await redis_client.delete("system_settings_cache")
 
 async def get_stored_password_hash():
     """Retrieves the admin password hash from the database."""
