@@ -278,7 +278,17 @@ async def get_system_settings():
     # 2. Fetch DB
     config = await settings_collection.find_one({"_id": "global_config"})
     if not config:
-        config = DEFAULT_SETTINGS
+        config = DEFAULT_SETTINGS.copy()
+    else:
+        # Deep merge: ensure new DEFAULT_SETTINGS keys exist in stored config
+        for key, default_val in DEFAULT_SETTINGS.items():
+            if key not in config:
+                config[key] = default_val
+            elif isinstance(default_val, dict) and isinstance(config.get(key), dict):
+                # Merge nested dicts (e.g. security, providers)
+                for sub_key, sub_val in default_val.items():
+                    if sub_key not in config[key]:
+                        config[key][sub_key] = sub_val
     
     # 3. Set Cache (300s = 5 mins)
     # Convert ObjectId to str if present (though settings usually don't have generated _id other than set string)
