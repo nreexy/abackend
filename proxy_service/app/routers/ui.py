@@ -26,7 +26,8 @@ from app.database import (
     get_cache,
     set_cache,
     get_collection_names,
-    execute_admin_query
+    execute_admin_query,
+    get_access_logs # <--- NEW
 )
 from app.security import LoginGuard
 from app.limiter import limiter
@@ -208,11 +209,17 @@ async def view_settings(request: Request):
     # Retrieve the token from the cookie to show it in the UI
     token = request.cookies.get("access_token", "")
     
+    # FETCH LOGS
+    system_logs = await get_system_logs(limit=200)
+    access_logs = await get_access_logs(limit=200)
+    
     return templates.TemplateResponse("settings.html", {
         "request": request, 
         "config": config, 
         "active_page": "settings",
-        "api_token": token # <--- Pass the token here
+        "api_token": token,
+        "system_logs": system_logs, # <--- Pass logs
+        "access_logs": access_logs  # <--- Pass security logs
     })
 
 
@@ -363,15 +370,7 @@ async def view_search_ui(request: Request):
 @router.get("/logs")
 async def view_system_logs(request: Request):
     if not await check_ui_auth(request): return RedirectResponse("/login")
-    
-    logs = await get_system_logs(limit=500)
-    logs.reverse()
-    
-    return templates.TemplateResponse("logs.html", {
-        "request": request, 
-        "logs": logs, 
-        "active_page": "logs"
-    })
+    return RedirectResponse(url="/settings#logs", status_code=303)
 
 @router.get("/stats")
 async def view_traffic_stats(request: Request):

@@ -21,6 +21,7 @@ db = mongo_client.audiobook_metadata
 books_collection = db.books          # Main Library
 custom_fields_collection = db.custom_fields
 logs_collection = db.request_logs    # Activity Logs
+access_logs_collection = db.access_logs # NEW: Security Logs
 settings_collection = db.settings
 lists_collection = db.lists
 lists_collection = db.lists
@@ -115,6 +116,19 @@ async def get_library_page(page: int = 1, limit: int = 50, sort_by: str = "added
 async def delete_book_from_library(asin: str):
     await books_collection.delete_one({"asin": asin})
     await redis_client.delete(f"book_v7:{asin}")
+
+async def increment_book_access(asin: str):
+    """
+    Atomically increments the access_count and updates last_accessed.
+    """
+    now = datetime.datetime.utcnow()
+    await books_collection.update_one(
+        {"asin": asin},
+        {
+            "$inc": {"access_count": 1},
+            "$set": {"last_accessed": now}
+        }
+    )
 
 async def search_library_books(query: str, limit: int = 10):
     """
@@ -308,6 +322,19 @@ async def log_provider_stats(request_id: str, provider: str, duration_ms: float,
 
 async def get_system_logs(limit: int = 100):
     return await logs_collection.find().sort("timestamp", -1).limit(limit).to_list(length=limit)
+
+async def log_request_access(data: dict):
+    """
+    Logs raw request access for Security Audit.
+    """
+    # Optional: Cap collection size? For now, just insert.
+    await access_logs_collection.insert_one(data)
+
+async def get_access_logs(limit: int = 100):
+    """
+    Fetches raw access logs for Security Tab.
+    """
+    return await access_logs_collection.find().sort("timestamp", -1).limit(limit).to_list(length=limit)
 
 async def get_traffic_stats():
     total_requests = await logs_collection.count_documents({})

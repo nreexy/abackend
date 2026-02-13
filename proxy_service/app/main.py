@@ -47,6 +47,10 @@ sys.stdout = PrintLogger(error_logger, logging.INFO)
 # --- APP DEFINITION ---
 app = FastAPI(title="Audiobook Metadata Proxy")
 
+# --- CUSTOM MIDDLEWARE ---
+from app.middleware import AccessLogMiddleware
+app.add_middleware(AccessLogMiddleware)
+
 # --- SECURITY & MIDDLEWARE ---
 
 # 1. Rate Limiter (Connects to Redis)

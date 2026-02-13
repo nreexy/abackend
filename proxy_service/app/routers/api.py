@@ -23,7 +23,8 @@ from app.database import (
     get_book_from_db,
     get_all_lists,
     get_list_by_id,
-    redis_client 
+    redis_client,
+    increment_book_access # <--- NEW IMPORT
 )
 from app.services import audible, itunes, goodreads, compiler, prh, google_books, hardcover, unifier
 from app.auth import get_current_user
@@ -365,7 +366,7 @@ async def get_prh_recommendations(isbn: str):
 
 # --- 2. DETAILS ENDPOINT ---
 @router.get("/book/{asin}")
-async def get_book_details(asin: str, request: Request):
+async def get_book_details(asin: str, request: Request, background_tasks: BackgroundTasks):
     start_ts = time.time()
     device_id, country = await process_client_info(request)
     cache_key = f"book_v7:{asin}"
@@ -374,15 +375,18 @@ async def get_book_details(asin: str, request: Request):
 
     # 1. Cache Check
     if cached := await get_cache(cache_key):
-        cached["access_count"] = cached.get("access_count", 0) + 1
-        cached["last_accessed"] = datetime.datetime.utcnow().isoformat()
-        await set_cache(cache_key, cached)
+        # Update Stats in Background
+        background_tasks.add_task(increment_book_access, asin)
+        
         cached["custom_metadata"] = await get_custom_fields(asin) or {}
         await log_activity("fetch_metadata", asin, details="Redis Hit", device_id=device_id, country=country, duration_ms=get_dur())
         return cached
 
     # 2. DB Check
     if stored := await get_book_from_db(asin):
+        # Update Stats in Background
+        background_tasks.add_task(increment_book_access, asin)
+        
         await set_cache(cache_key, stored)
         stored["custom_metadata"] = await get_custom_fields(asin) or {}
         await log_activity("fetch_metadata", asin, details="Mongo Hit", device_id=device_id, country=country, duration_ms=get_dur())
