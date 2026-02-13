@@ -28,7 +28,10 @@ from app.database import (
     get_collection_names,
     execute_admin_query,
     get_access_logs, 
-    access_logs_collection # <--- Import this
+    access_logs_collection,
+    get_blocked_clients, # NEW
+    add_block,           # NEW
+    remove_block         # NEW
 )
 from app.security import LoginGuard
 from app.limiter import limiter
@@ -114,11 +117,14 @@ async def login(request: Request, response: Response, username: str = Form(...),
         # Set Cookie (HttpOnly)
         resp = RedirectResponse(url="/dashboard", status_code=status.HTTP_303_SEE_OTHER)
         
+        # HTTPS Detection: secure cookie only when behind HTTPS proxy
+        is_https = request.headers.get("x-forwarded-proto", "http") == "https"
+        
         resp.set_cookie(
             key="access_token", 
             value=access_token, 
             httponly=True,   # JavaScript cannot read it
-            secure=False,    # Set to True if you are using HTTPS
+            secure=is_https, # Auto-detect: True behind HTTPS, False on local dev
             samesite="lax",  # Protects against CSRF
             max_age=60*60*24*7 # 7 Days
         )
@@ -213,6 +219,7 @@ async def view_settings(request: Request, status_filter: Optional[int] = None):
     # FETCH LOGS
     system_logs = await get_system_logs(limit=200)
     access_logs = await get_access_logs(limit=200, status_code=status_filter)
+    blocks = await get_blocked_clients()
     
     return templates.TemplateResponse("settings.html", {
         "request": request, 
@@ -221,7 +228,8 @@ async def view_settings(request: Request, status_filter: Optional[int] = None):
         "api_token": token,
         "system_logs": system_logs, 
         "access_logs": access_logs,
-        "current_status_filter": status_filter
+        "current_status_filter": status_filter,
+        "blocked_clients": blocks
     })
 
 
@@ -245,7 +253,13 @@ async def update_settings(
     clear_google_books_api_key: bool = Form(False),
     clear_prh_api_key: bool = Form(False),
     clear_hardcover_api_key: bool = Form(False),
-    clear_static_api_key: bool = Form(False) # <--- NEW
+    clear_static_api_key: bool = Form(False),
+    # Security Settings
+    sec_enable_country: bool = Form(False),
+    sec_allowed_countries: str = Form("DE"),
+    sec_enable_ua: bool = Form(False),
+    sec_required_ua: str = Form("Macintosh"),
+    sec_anti_scan: bool = Form(True)
 ):
     if not await check_ui_auth(request): return RedirectResponse("/login")
 
@@ -255,6 +269,7 @@ async def update_settings(
         providers = current_config.get("providers", {})
         search_limit = current_config.get("search_limit", 5)
         scrape_limit_pages = current_config.get("scrape_limit_pages", 100)
+        security = current_config.get("security", {}) # Preserve security settings
         
         # Handle Clearing Keys (Override input if clear is requested)
         if clear_google_books_api_key: google_books_api_key = ""
@@ -263,7 +278,7 @@ async def update_settings(
         if clear_static_api_key: static_api_key = ""
 
         # Only update the key
-        await save_system_settings(providers, search_limit, scrape_limit_pages, google_books_api_key, prh_api_key, hardcover_api_key, static_api_key)
+        await save_system_settings(providers, search_limit, scrape_limit_pages, google_books_api_key, prh_api_key, hardcover_api_key, static_api_key, security)
         
     else:
         # Main settings form update
@@ -275,8 +290,18 @@ async def update_settings(
             "google": prov_google,
             "hardcover": prov_hardcover
         }
+        
+        # Parse Security Settings
+        security = {
+            "enable_country_block": sec_enable_country,
+            "allowed_countries": [c.strip() for c in sec_allowed_countries.split(",") if c.strip()],
+            "enable_ua_block": sec_enable_ua,
+            "required_ua_keywords": [k.strip() for k in sec_required_ua.split(",") if k.strip()],
+            "enable_strict_anti_scan": sec_anti_scan
+        }
+        
         # Don't overwrite key with None if not in this form
-        await save_system_settings(providers, limit, scrape_limit, google_books_api_key=google_books_api_key, prh_api_key=prh_api_key, hardcover_api_key=hardcover_api_key, static_api_key=static_api_key)
+        await save_system_settings(providers, limit, scrape_limit, google_books_api_key=google_books_api_key, prh_api_key=prh_api_key, hardcover_api_key=hardcover_api_key, static_api_key=static_api_key, security=security)
 
     return RedirectResponse(url="/settings?saved=true", status_code=303)
 
@@ -365,7 +390,7 @@ async def view_search_ui(request: Request):
     config = await get_system_settings()
     return templates.TemplateResponse("search_ui.html", {
         "request": request, 
-        "config": config,
+        "config": config, 
         "active_page": "search"
     })
 
@@ -471,3 +496,35 @@ async def delete_list_action(request: Request, list_id: str = Form(...)):
     
     # Redirect back to the lists page
     return RedirectResponse(url="/lists", status_code=303)
+
+# --- BLOCKLIST ROUTES ---
+
+@router.post("/settings/block", response_class=RedirectResponse)
+async def block_client(
+    request: Request,
+    block_value: str = Form(...),
+    block_type: str = Form(...),
+    reason: str = Form("Manual Ban"),
+    user: dict = Depends(get_current_user)
+):
+    """
+    Manually blocks an IP or User-Agent.
+    """
+    if block_type not in ["ip", "user_agent"]:
+        raise HTTPException(status_code=400, detail="Invalid block type")
+        
+    success = await add_block(block_value, block_type, reason)
+    
+    return RedirectResponse(url="/settings#blocklist", status_code=303)
+
+@router.post("/settings/unblock", response_class=RedirectResponse)
+async def unblock_client(
+    request: Request,
+    block_value: str = Form(...),
+    user: dict = Depends(get_current_user)
+):
+    """
+    Unblocks an IP or User-Agent.
+    """
+    await remove_block(block_value)
+    return RedirectResponse(url="/settings#blocklist", status_code=303)

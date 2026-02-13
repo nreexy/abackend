@@ -53,6 +53,11 @@
                     class="bi bi-shield-check me-2"></i>Access Logs</button>
         </li>
         <li class="nav-item" role="presentation">
+            <button class="nav-link px-4 fw-bold text-danger" id="blocklist-tab" data-bs-toggle="pill"
+                data-bs-target="#blocklist" type="button" role="tab" aria-controls="blocklist" aria-selected="false"><i
+                    class="bi bi-slash-circle me-2"></i>Blocklist</button>
+        </li>
+        <li class="nav-item" role="presentation">
             <button class="nav-link px-4 fw-bold text-danger" id="danger-tab" data-bs-toggle="pill"
                 data-bs-target="#danger" type="button" role="tab" aria-controls="danger" aria-selected="false"><i
                     class="bi bi-exclamation-octagon-fill me-2"></i>Danger Zone</button>
@@ -337,7 +342,7 @@
             </div>
         </div>
 
-        <!-- TAB 4: LOGS -->
+        <!-- TAB 4: SYSTEM LOGS -->
         <div class="tab-pane fade" id="logs" role="tabpanel" aria-labelledby="logs-tab">
             <div class="row section-header mb-3">
                 <div class="col-12">
@@ -377,8 +382,80 @@
             </div>
         </div>
 
-        <!-- TAB 5: SECURITY -->
+        <!-- TAB 5: ACCESS LOGS -->
         <div class="tab-pane fade" id="security" role="tabpanel" aria-labelledby="security-tab">
+            <div class="row section-header mb-3">
+                <div class="col-12">
+                    <h5 class="fw-bold text-dark border-bottom pb-2">Automated Security Rules</h5>
+                </div>
+            </div>
+
+            <!-- Automated Security Card -->
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <!-- Strict Anti-Scan -->
+                        <div class="col-12 border-bottom pb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="sec_anti_scan" name="sec_anti_scan"
+                                    value="true" {% if config.security.enable_strict_anti_scan %}checked{% endif %}
+                                    form="mainForm">
+                                <label class="form-check-label fw-bold text-danger" for="sec_anti_scan">
+                                    <i class="bi bi-shield-fill-exclamation me-1"></i>Strict Anti-Scanning
+                                </label>
+                            </div>
+                            <div class="small text-muted ms-5">
+                                Automatically <strong>PERMANENTLY BAN</strong> any IP that attempts to access sensitive
+                                files
+                                (e.g. <code>.env</code>, <code>.git</code>, <code>wp-config.php</code>).
+                            </div>
+                        </div>
+
+                        <!-- Country Blocking -->
+                        <div class="col-md-6 border-end">
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" id="sec_enable_country"
+                                    name="sec_enable_country" value="true" {% if config.security.enable_country_block
+                                    %}checked{% endif %} form="mainForm">
+                                <label class="form-check-label fw-bold" for="sec_enable_country">Geo-Blocking</label>
+                            </div>
+                            <div class="ms-4">
+                                <label class="form-label small text-muted">Allowed Allowed Country Codes (comma
+                                    separated)</label>
+                                <input type="text" class="form-control form-control-sm font-monospace"
+                                    name="sec_allowed_countries"
+                                    value="{{ ', '.join(config.security.allowed_countries) }}" placeholder="DE, US"
+                                    form="mainForm">
+                                <div class="form-text small">Only IPs from these countries will be allowed access.</div>
+                            </div>
+                        </div>
+
+                        <!-- UA Blocking -->
+                        <div class="col-md-6">
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" id="sec_enable_ua" name="sec_enable_ua"
+                                    value="true" {% if config.security.enable_ua_block %}checked{% endif %}
+                                    form="mainForm">
+                                <label class="form-check-label fw-bold" for="sec_enable_ua">Device Restriction</label>
+                            </div>
+                            <div class="ms-4">
+                                <label class="form-label small text-muted">Required User-Agent Keywords</label>
+                                <input type="text" class="form-control form-control-sm font-monospace"
+                                    name="sec_required_ua" value="{{ ', '.join(config.security.required_ua_keywords) }}"
+                                    placeholder="Macintosh" form="mainForm">
+                                <div class="form-text small">User-Agent must contain at least one of these keywords.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer bg-light py-2">
+                    <button type="submit" class="btn btn-primary btn-sm fw-bold" form="mainForm">
+                        <i class="bi bi-save me-1"></i>Update Security Rules
+                    </button>
+                </div>
+            </div>
+
             <div class="row section-header mb-3">
                 <div class="col-12">
                     <h5 class="fw-bold text-dark border-bottom pb-2">Access Logs & Security Audit</h5>
@@ -454,7 +531,20 @@
                                 <td>{{ log.method }}</td>
                                 <td class="text-truncate" style="max-width: 250px;"
                                     title="{{ log.path }}?{{ log.query }}">{{ log.path }}</td>
-                                <td>{{ log.ip }}</td>
+                                <td>
+                                    {% if log.flag %}<span class="me-1 fs-5" title="{{ log.country_code }}">{{ log.flag
+                                        }}</span>{% endif %}
+                                    <span class="badge bg-light text-dark font-monospace border">{{ log.ip }}</span>
+                                    <form action="/settings/block" method="POST" class="d-inline ms-1">
+                                        <input type="hidden" name="block_value" value="{{ log.ip }}">
+                                        <input type="hidden" name="block_type" value="ip">
+                                        <input type="hidden" name="reason" value="Banned from Logs">
+                                        <button type="submit" class="btn btn-link p-0 text-danger" title="Ban IP"
+                                            onclick="return confirm('Block this IP?')">
+                                            <i class="bi bi-slash-circle"></i>
+                                        </button>
+                                    </form>
+                                </td>
                                 <td>{{ log.duration_ms }}ms</td>
                             </tr>
                             {% else %}
@@ -468,7 +558,94 @@
             </div>
         </div>
 
-        <!-- TAB 4: DANGER ZONE -->
+        <!-- TAB 6: BLOCKLIST TAB -->
+        <div class="tab-pane fade" id="blocklist" role="tabpanel" aria-labelledby="blocklist-tab">
+            <div class="row section-header mb-3">
+                <div class="col-12">
+                    <h5 class="fw-bold text-dark border-bottom pb-2">Blocked Clients</h5>
+                </div>
+            </div>
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="card-title mb-0"><i class="bi bi-slash-circle me-2"></i>Block Manager</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Manually block IPs or User-Agents. Blocked clients will receive a 403
+                        Forbidden response.</p>
+
+                    <!-- Manual Block Form -->
+                    <form action="/settings/block" method="POST" class="row g-3 mb-4 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label">Value (IP or User-Agent fragment)</label>
+                            <input type="text" name="block_value" class="form-control"
+                                placeholder="e.g. 192.168.1.5 or 'Bot'" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Type</label>
+                            <select name="block_type" class="form-select">
+                                <option value="ip">IP Address</option>
+                                <option value="user_agent">User Agent</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Reason</label>
+                            <input type="text" name="reason" class="form-control" value="Manual Ban">
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-danger w-100">Block</button>
+                        </div>
+                    </form>
+
+                    <hr>
+
+                    <!-- Blocklist Table -->
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Type</th>
+                                    <th>Value</th>
+                                    <th>Reason</th>
+                                    <th>Date Added</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if blocked_clients %}
+                                {% for block in blocked_clients %}
+                                <tr>
+                                    <td>
+                                        {% if block.type == 'ip' %}
+                                        <span class="badge bg-primary">IP</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">UA</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="font-monospace">{{ block.value }}</td>
+                                    <td>{{ block.reason }}</td>
+                                    <td class="text-muted small">{{ block.added_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                    <td>
+                                        <form action="/settings/unblock" method="POST" class="d-inline">
+                                            <input type="hidden" name="block_value" value="{{ block.value }}">
+                                            <button type="submit"
+                                                class="btn btn-sm btn-outline-success">Unblock</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                                {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted py-3">No active blocks</td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 7: DANGER ZONE -->
         <div class="tab-pane fade" id="danger" role="tabpanel" aria-labelledby="danger-tab">
             <div class="row section-header mb-3">
                 <div class="col-12">

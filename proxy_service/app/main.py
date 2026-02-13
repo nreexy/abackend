@@ -48,8 +48,11 @@ sys.stdout = PrintLogger(error_logger, logging.INFO)
 app = FastAPI(title="Audiobook Metadata Proxy")
 
 # --- CUSTOM MIDDLEWARE ---
-from app.middleware import AccessLogMiddleware
+# --- CUSTOM MIDDLEWARE ---
+from app.middleware import AccessLogMiddleware, SecurityMiddleware, SecurityHeadersMiddleware
+app.add_middleware(SecurityHeadersMiddleware)  # Outermost: adds headers to all responses
 app.add_middleware(AccessLogMiddleware)
+app.add_middleware(SecurityMiddleware)
 
 # --- SECURITY & MIDDLEWARE ---
 

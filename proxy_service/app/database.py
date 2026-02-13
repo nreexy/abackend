@@ -23,9 +23,68 @@ books_collection = db.books          # Main Library
 custom_fields_collection = db.custom_fields
 logs_collection = db.request_logs    # Activity Logs
 access_logs_collection = db.access_logs # NEW: Security Logs
+blocked_clients_collection = db.blocked_clients # NEW: Blocklist
 settings_collection = db.settings
 lists_collection = db.lists
-lists_collection = db.lists
+# ... (existing code)
+
+# --- BLOCKLIST LOGIC ---
+async def get_blocked_clients():
+    """Returns all blocked clients."""
+    return await blocked_clients_collection.find().sort("added_at", -1).to_list(length=1000)
+
+async def add_block(value: str, block_type: str, reason: str = "Manual Ban"):
+    """
+    Adds an IP or User-Agent to the blocklist.
+    block_type: 'ip' or 'user_agent'
+    """
+    # Check if already blocked
+    existing = await blocked_clients_collection.find_one({"value": value})
+    if existing:
+        return False
+        
+    await blocked_clients_collection.insert_one({
+        "value": value,
+        "type": block_type,
+        "reason": reason,
+        "added_at": datetime.datetime.utcnow()
+    })
+    
+    # Invalidate Cache
+    await redis_client.delete("blocklist_cache")
+    return True
+
+async def remove_block(value: str):
+    """Removes a block."""
+    result = await blocked_clients_collection.delete_one({"value": value})
+    # Invalidate Cache
+    await redis_client.delete("blocklist_cache")
+    return result.deleted_count > 0
+
+async def is_client_blocked(ip: str, user_agent: str) -> bool:
+    """
+    Checks if an IP or User-Agent is blocked.
+    Uses Redis caching to avoid DB hits on every request.
+    """
+    # 1. Check Redis Cache
+    cached_blocks = await redis_client.get("blocklist_cache")
+    if cached_blocks:
+        blocks = json.loads(cached_blocks)
+    else:
+        # 2. Fetch from DB
+        cursor = blocked_clients_collection.find({}, {"_id": 0, "value": 1, "type": 1})
+        blocks = await cursor.to_list(length=1000)
+        # Cache for 1 minute (or until update)
+        await redis_client.setex("blocklist_cache", 60, json.dumps(blocks))
+        
+    # 3. Check against list
+    for block in blocks:
+        if block["type"] == "ip" and block["value"] == ip:
+            return True
+        if block["type"] == "user_agent" and block["value"] in user_agent:
+             return True
+             
+    return False
 provider_stats_collection = db.provider_stats
 unified_catalog_collection = db.unified_catalog
 
@@ -199,7 +258,14 @@ DEFAULT_SETTINGS = {
     "google_books_api_key": os.getenv("GOOGLE_BOOKS_API_KEY", ""),
     "prh_api_key": os.getenv("PRH_API_KEY", ""),
     "hardcover_api_key": os.getenv("HARDCOVER_API_KEY", ""),
-    "static_api_key": None
+    "static_api_key": None,
+    "security": {
+        "enable_country_block": False,
+        "allowed_countries": ["DE"], 
+        "enable_ua_block": False,
+        "required_ua_keywords": ["Macintosh"], 
+        "enable_strict_anti_scan": True 
+    }
 }
 
 async def get_system_settings():
@@ -225,7 +291,7 @@ async def get_system_settings():
     
     return config
 
-async def save_system_settings(providers: dict, search_limit: int, scrape_limit_pages: int, google_books_api_key: str = None, prh_api_key: str = None, hardcover_api_key: str = None, static_api_key: str = None):
+async def save_system_settings(providers: dict, search_limit: int, scrape_limit_pages: int, google_books_api_key: str = None, prh_api_key: str = None, hardcover_api_key: str = None, static_api_key: str = None, security: dict = None):
     update_fields = {
         "providers": providers, 
         "search_limit": search_limit, 
@@ -245,6 +311,9 @@ async def save_system_settings(providers: dict, search_limit: int, scrape_limit_
         
     if static_api_key is not None:
         update_fields["static_api_key"] = static_api_key
+
+    if security is not None:
+        update_fields["security"] = security
 
     await settings_collection.update_one(
         {"_id": "global_config"},
@@ -324,10 +393,52 @@ async def log_provider_stats(request_id: str, provider: str, duration_ms: float,
 async def get_system_logs(limit: int = 100):
     return await logs_collection.find().sort("timestamp", -1).limit(limit).to_list(length=limit)
 
+async def get_country_code(ip: str) -> Optional[str]:
+    """
+    Resolves IP to 2-letter Country Code using ip-api.com.
+    Caches results in Redis for 24 hours.
+    Returns None if private IP or lookup fails.
+    """
+    # 0. Skip Local/Private IPs (basic check)
+    if ip in ["127.0.0.1", "localhost", "::1"] or ip.startswith("192.168.") or ip.startswith("10."):
+        return None
+        
+    # 1. Check Redis Cache
+    cache_key = f"ip_country:{ip}"
+    cached_code = await redis_client.get(cache_key)
+    if cached_code:
+        return cached_code if cached_code != "Unknown" else None
+
+    # 2. External API Lookup
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"http://ip-api.com/json/{ip}?fields=countryCode", timeout=3.0)
+            if resp.status_code == 200:
+                data = resp.json()
+                code = data.get("countryCode")
+                if code:
+                    # Cache Success (24h)
+                    await redis_client.set(cache_key, code, ex=86400)
+                    return code
+    except Exception as e:
+        print(f"GeoIP Lookup Failed for {ip}: {e}")
+        pass
+
+    # 3. Cache Failure (to avoid retry storms)
+    await redis_client.set(cache_key, "Unknown", ex=3600) # Cache failure for 1h
+    return None
+
 async def log_request_access(data: dict):
     """
     Logs raw request access for Security Audit.
     """
+    # Enrich with GeoIP
+    ip = data.get("ip")
+    if ip:
+        country_code = await get_country_code(ip)
+        if country_code:
+            data["country_code"] = country_code
+
     # Optional: Cap collection size? For now, just insert.
     await access_logs_collection.insert_one(data)
 
@@ -339,7 +450,18 @@ async def get_access_logs(limit: int = 100, status_code: Optional[int] = None):
     if status_code is not None:
         query["status_code"] = status_code
         
-    return await access_logs_collection.find(query).sort("timestamp", -1).limit(limit).to_list(length=limit)
+    logs = await access_logs_collection.find(query).sort("timestamp", -1).limit(limit).to_list(length=limit)
+    
+    # Add Flag Emoji
+    for log in logs:
+        cc = log.get("country_code")
+        if cc:
+            # Convert 2-letter country code to flag emoji
+            # Regional Indicator Symbol A is 0x1F1E6 (127462)
+            # 'A' is 65. Offset = 127462 - 65 = 127397
+            log["flag"] = "".join([chr(ord(c) + 127397) for c in cc.upper()])
+            
+    return logs
 
 async def get_traffic_stats():
     total_requests = await logs_collection.count_documents({})
