@@ -77,9 +77,13 @@ app.add_middleware(
 
 # --- EVENTS & ROUTES ---
 
+from app.scheduler import start_scheduler, refresh_scheduler_jobs
+
 @app.on_event("startup")
 async def startup_db_client():
     await init_db_indexes()
+    start_scheduler()
+    await refresh_scheduler_jobs()
     print(f"📝 System Logging fully initialized to {LOG_FILE}")
 
 app.include_router(api.router)

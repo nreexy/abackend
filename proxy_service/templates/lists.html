@@ -4,9 +4,15 @@
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2>Collections</h2>
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#importModal">
-            <i class="bi bi-plus-lg"></i> Import New List
-        </button>
+        <div class="btn-group">
+            <button class="btn btn-outline-dark" data-bs-toggle="modal" data-bs-target="#importNytModal"
+                onclick="loadNytLists()">
+                <i class="bi bi-newspaper"></i> Import NYT List
+            </button>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#importModal">
+                <i class="bi bi-plus-lg"></i> Import Audible List
+            </button>
+        </div>
     </div>
 
     <!-- Lists Grid -->
@@ -23,6 +29,9 @@
                         {% if lst.type == 'custom' %}
                         <span class="badge bg-secondary" title="Manual Collection"><i class="bi bi-person-fill"></i>
                             Custom</span>
+                        {% elif lst.source == 'NYT' %}
+                        <span class="badge bg-dark text-white border" title="New York Times"><i
+                                class="bi bi-newspaper"></i> NYT</span>
                         {% elif lst.source == 'Goodreads' or 'goodreads.com' in lst.url %}
                         <span class="badge bg-success" title="Imported from Goodreads"><i class="bi bi-book"></i>
                             Goodreads</span>
@@ -97,6 +106,62 @@
         </div>
     </div>
 
+    <!-- NYT Import Modal -->
+    <div class="modal fade" id="importNytModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form action="/nyt/import" method="POST">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Import from New York Times</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Select a Best Seller list to import.</p>
+
+                        <div class="mb-3 text-center" id="nytLoading">
+                            <div class="spinner-border text-primary" role="status"></div>
+                            <div class="mt-2 small text-muted">Fetching lists from NYT...</div>
+                        </div>
+
+                        <div class="mb-3" id="nytDebugSection">
+                            <div class="d-grid gap-2">
+                                <button type="button" class="btn btn-sm btn-outline-secondary"
+                                    onclick="testNytConnection()">Test Connection & Debug</button>
+                            </div>
+                            <pre class="mt-2 bg-light p-2 border rounded d-none small" id="nytDebugOutput"
+                                style="max-height: 200px; overflow-y: auto;"></pre>
+                        </div>
+
+                        <div class="mb-3 d-none" id="nytFormContent">
+                            <label class="form-label">Select List</label>
+                            <select class="form-select" name="list_name_encoded" id="nytListSelect" required
+                                onchange="updateDisplayName()">
+                                <option value="" disabled selected>Choose a list...</option>
+                            </select>
+                            <input type="hidden" name="display_name" id="nytDisplayName">
+
+                            <div class="form-check mt-3">
+                                <input class="form-check-input" type="checkbox" name="subscribe" value="true"
+                                    id="nytSubscribe">
+                                <label class="form-check-label" for="nytSubscribe">
+                                    Subscribe for Weekly Updates (Mondays)
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-warning d-none" id="nytError">
+                            Failed to load lists. Check API Key in settings.
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="submit" class="btn btn-dark" id="nytImportBtn" disabled>Import List</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script>
         async function startImport() {
             const url = document.getElementById('listUrl').value;
@@ -123,6 +188,78 @@
             } catch (e) {
                 alert("Network Error");
                 status.classList.add('d-none');
+            }
+        }
+
+        // NYT Functions
+        let nytLoaded = false;
+
+        async function loadNytLists() {
+            if (nytLoaded) return;
+
+            const loading = document.getElementById('nytLoading');
+            const content = document.getElementById('nytFormContent');
+            const error = document.getElementById('nytError');
+            const select = document.getElementById('nytListSelect');
+            const btn = document.getElementById('nytImportBtn');
+            const debugSection = document.getElementById('nytDebugSection');
+
+            // Hide debug section initially if we want clean UI, or keep it visible
+            // debugSection.classList.add('d-none'); 
+
+            try {
+                const res = await fetch('/nyt/lists');
+                if (!res.ok) throw new Error("Failed");
+
+                const lists = await res.json();
+
+                if (lists.length === 0) {
+                    // If empty list but 200 OK, maybe API key issue or empty response
+                    throw new Error("No lists found");
+                }
+
+                // Clear existing (keep first)
+                select.innerHTML = '<option value="" disabled selected>Choose a list...</option>';
+
+                lists.forEach(l => {
+                    const opt = document.createElement('option');
+                    opt.value = l.list_name_encoded;
+                    opt.text = l.display_name;
+                    select.appendChild(opt);
+                });
+
+                loading.classList.add('d-none');
+                content.classList.remove('d-none');
+                btn.removeAttribute('disabled');
+                nytLoaded = true;
+
+            } catch (e) {
+                loading.classList.add('d-none');
+                error.classList.remove('d-none');
+                // Auto-show debug info if failed?
+                // testNytConnection(); 
+            }
+        }
+
+        async function testNytConnection() {
+            const out = document.getElementById('nytDebugOutput');
+            out.classList.remove('d-none');
+            out.textContent = "Testing connection...";
+
+            try {
+                const res = await fetch('/nyt/debug');
+                const data = await res.json();
+                out.textContent = JSON.stringify(data, null, 2);
+            } catch (e) {
+                out.textContent = "Error calling debug endpoint: " + e;
+            }
+        }
+
+        function updateDisplayName() {
+            const select = document.getElementById('nytListSelect');
+            const hidden = document.getElementById('nytDisplayName');
+            if (select.selectedIndex >= 0) {
+                hidden.value = select.options[select.selectedIndex].text;
             }
         }
     </script>

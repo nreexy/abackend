@@ -48,7 +48,12 @@
                             </td>
                             <td>
                                 <div class="fw-bold">{{ book.title }}</div>
+                                {% if book.asin %}
                                 <small class="text-muted">{{ book.asin }}</small>
+                                {% else %}
+                                <small class="text-muted font-monospace">{{ book.primary_isbn13 or book.isbn10 or "-"
+                                    }}</small>
+                                {% endif %}
                             </td>
                             <td>{{ book.authors_str }}</td>
                             <td class="text-muted">{{ book.narrators_str }}</td>
@@ -60,9 +65,16 @@
                                 {% endif %}
                             </td>
                             <td class="text-end pe-4">
+                                {% if book.asin %}
                                 <a href="/book/{{ book.asin }}" target="_blank" class="btn btn-sm btn-outline-primary">
                                     <i class="bi bi-code-slash"></i>
                                 </a>
+                                {% else %}
+                                <a href="/search_ui?q={{ book.primary_isbn13 or book.title }}" target="_blank"
+                                    class="btn btn-sm btn-outline-secondary" title="Search in Library">
+                                    <i class="bi bi-search"></i>
+                                </a>
+                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}

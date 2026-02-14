@@ -1,0 +1,41 @@
+import datetime
+import uuid
+from bson.objectid import ObjectId
+from .core import lists_collection
+
+# --- LISTS LOGIC ---
+
+async def save_imported_list(name: str, url: str, asins: list, source: str = "Audible", raw_items: list = None):
+    doc = {
+        "name": name, "url": url, "asins": asins, "count": len(asins) if not raw_items else len(raw_items),
+        "type": "imported", "source": source,
+        # Store raw items for lists without ASINs (e.g. NYT)
+        "items": raw_items or [],
+        "created_at": datetime.datetime.utcnow(),
+        "updated_at": datetime.datetime.utcnow()
+    }
+    await lists_collection.update_one({"url": url}, {"$set": doc}, upsert=True)
+
+async def create_custom_list(name: str, asins: list):
+    internal_id = f"custom:{uuid.uuid4()}"
+    doc = {
+        "name": name, "url": internal_id, "asins": asins, "count": len(asins),
+        "type": "custom", "source": "Custom",
+        "created_at": datetime.datetime.utcnow(),
+        "updated_at": datetime.datetime.utcnow()
+    }
+    await lists_collection.insert_one(doc)
+    return internal_id
+
+async def get_all_lists():
+    return await lists_collection.find().sort("created_at", -1).to_list(length=None)
+
+async def get_list_by_id(list_id: str):
+    try: return await lists_collection.find_one({"_id": ObjectId(list_id)})
+    except: return None
+
+async def delete_list_by_id(list_id: str):
+    try:
+        await lists_collection.delete_one({"_id": ObjectId(list_id)})
+        return True
+    except: return False

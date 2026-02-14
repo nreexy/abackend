@@ -15,3 +15,5 @@ passlib[bcrypt]
 # FIX: Pin bcrypt to 3.2.2 to fix compatibility with passlib
 bcrypt==3.2.2
 slowapi
+APScheduler
+aiofiles

@@ -58,6 +58,11 @@
                     class="bi bi-slash-circle me-2"></i>Blocklist</button>
         </li>
         <li class="nav-item" role="presentation">
+            <button class="nav-link px-4 fw-bold" id="backups-tab" data-bs-toggle="pill" data-bs-target="#backups"
+                type="button" role="tab" aria-controls="backups" aria-selected="false"><i
+                    class="bi bi-hdd-network me-2"></i>Backups</button>
+        </li>
+        <li class="nav-item" role="presentation">
             <button class="nav-link px-4 fw-bold text-danger" id="danger-tab" data-bs-toggle="pill"
                 data-bs-target="#danger" type="button" role="tab" aria-controls="danger" aria-selected="false"><i
                     class="bi bi-exclamation-octagon-fill me-2"></i>Danger Zone</button>
@@ -112,7 +117,302 @@
             </div>
         </div>
 
-        <!-- TAB 2: PROVIDERS -->
+        <!-- TAB: BACKUPS -->
+        <div class="tab-pane fade" id="backups" role="tabpanel">
+            <div class="row mb-4">
+                <!-- Manual Backup Card -->
+                <div class="col-md-6">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header bg-white py-3">
+                            <h5 class="mb-0"><i class="bi bi-hdd-network me-2"></i>Manual Backup</h5>
+                        </div>
+                        <div class="card-body">
+                            <form action="/settings/backup/create" method="POST">
+                                <div class="mb-3">
+                                    <label class="form-label">Select Sections:</label>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="sections" value="settings"
+                                            checked>
+                                        <label class="form-check-label">Settings (Config, Blocklist)</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="sections" value="books"
+                                            checked>
+                                        <label class="form-check-label">Library (Books, Custom Fields)</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="sections" value="logs">
+                                        <label class="form-check-label">Logs (Activity, Access, Login)</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="sections" value="lists">
+                                        <label class="form-check-label">Lists</label>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary"><i
+                                        class="bi bi-cloud-arrow-up me-2"></i>Create Backup Now</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Configuration Card -->
+                <div class="col-md-6">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header bg-white py-3">
+                            <h5 class="mb-0"><i class="bi bi-gear me-2"></i>Backup Configuration</h5>
+                        </div>
+                        <div class="card-body">
+                            <form action="/settings/backup/config" method="POST">
+                                <div class="mb-3">
+                                    <label class="form-label">Retention Policy (Days)</label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" name="retention_days"
+                                            value="{{ config.get('backup_retention_days', 0) }}" min="0">
+                                        <span class="input-group-text">days</span>
+                                    </div>
+                                    <div class="form-text">Auto-delete backups older than X days. Set to 0 to disable
+                                        cleanup.</div>
+                                </div>
+                                <button type="submit" class="btn btn-primary">Save Configuration</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Job Schedule Table -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-calendar-check me-2"></i>Scheduled Backups</h5>
+                    <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal"
+                        data-bs-target="#addScheduleModal">
+                        <i class="bi bi-plus-lg"></i> Add Schedule
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Schedule</th>
+                                    <th>Time (UTC)</th>
+                                    <th>Sections</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if backup_jobs %}
+                                {% for job in backup_jobs %}
+                                <tr>
+                                    <td>
+                                        {% if job.schedule_type == 'daily' %}
+                                        <span class="badge bg-info text-dark">Daily</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">Weekly ({{ job.day_of_week|title }})</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ job.time }}</td>
+                                    <td>
+                                        {% for sec in job.sections %}
+                                        <span class="badge bg-light text-dark border">{{ sec|title }}</span>
+                                        {% endfor %}
+                                    </td>
+                                    <td>
+                                        {% if job.enabled %}
+                                        <span class="text-success"><i class="bi bi-check-circle"></i> Active</span>
+                                        {% else %}
+                                        <span class="text-muted">Paused</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <form action="/settings/backup/job/delete" method="POST"
+                                            onsubmit="return confirm('Delete this schedule?');">
+                                            <input type="hidden" name="job_id" value="{{ job._id }}">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger"><i
+                                                    class="bi bi-trash"></i></button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                                {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center p-4 text-muted">No scheduled backups configured.
+                                    </td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Backup History Table -->
+            <div class="card shadow-sm">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Backup History</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>Filename</th>
+                                    <th>Size</th>
+                                    <th>Sections</th>
+                                    <th>Trigger</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if backup_history %}
+                                {% for h in backup_history %}
+                                <tr>
+                                    <td>{{ h.timestamp_str }}</td>
+                                    <td class="font-monospace small">{{ h.filename }}</td>
+                                    <td>{{ (h.size_bytes / 1024)|round(1) }} KB</td>
+                                    <td>
+                                        {% for sec in h.sections %}
+                                        <span class="badge bg-light text-dark border">{{ sec|title }}</span>
+                                        {% endfor %}
+                                    </td>
+                                    <td>
+                                        {% if h.trigger == 'manual' %}
+                                        <span class="badge bg-secondary">Manual</span>
+                                        {% else %}
+                                        <span class="badge bg-info text-dark">Scheduled</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if h.status == 'success' %}
+                                        <span class="badge bg-success">Success</span>
+                                        {% else %}
+                                        <span class="badge bg-danger">Failed</span>
+                                        <i class="bi bi-info-circle" title="{{ h.error }}"></i>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group">
+                                            <a href="/settings/backup/download/{{ h.filename }}"
+                                                class="btn btn-sm btn-outline-secondary" title="Download Backup">
+                                                <i class="bi bi-download"></i>
+                                            </a>
+                                            <form action="/settings/backup/restore" method="POST"
+                                                onsubmit="return confirm('Restore from this backup? This will overwrite existing data.');"
+                                                class="d-inline ms-1">
+                                                <input type="hidden" name="filename" value="{{ h.filename }}">
+                                                <button type="submit" class="btn btn-sm btn-outline-primary"
+                                                    title="Restore Full Backup">
+                                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                                </button>
+                                            </form>
+                                            <form action="/settings/backup/delete" method="POST"
+                                                onsubmit="return confirm('Delete this backup file?');"
+                                                class="d-inline ms-1">
+                                                <input type="hidden" name="filename" value="{{ h.filename }}">
+                                                <button type="submit" class="btn btn-sm btn-outline-danger"
+                                                    title="Delete Backup">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                                {% else %}
+                                <tr>
+                                    <td colspan="7" class="text-center p-4 text-muted">No backup history found.</td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Schedule Modal -->
+        <div class="modal fade" id="addScheduleModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <form action="/settings/backup/job/add" method="POST">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Add Backup Schedule</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label class="form-label">Frequency</label>
+                                <select class="form-select" name="schedule_type" id="scheduleTypeSelect"
+                                    onchange="toggleDaySelect()">
+                                    <option value="daily">Daily</option>
+                                    <option value="weekly">Weekly</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3 d-none" id="daySelectDiv">
+                                <label class="form-label">Day of Week</label>
+                                <select class="form-select" name="day_of_week">
+                                    <option value="mon">Monday</option>
+                                    <option value="tue">Tuesday</option>
+                                    <option value="wed">Wednesday</option>
+                                    <option value="thu">Thursday</option>
+                                    <option value="fri">Friday</option>
+                                    <option value="sat">Saturday</option>
+                                    <option value="sun">Sunday</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Time (UTC)</label>
+                                <input type="time" class="form-control" name="time" value="03:00" required>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Sections to Backup</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="sections" value="settings"
+                                        checked>
+                                    <label class="form-check-label">Settings</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="sections" value="books"
+                                        checked>
+                                    <label class="form-check-label">Library</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="sections" value="logs">
+                                    <label class="form-check-label">Logs</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="sections" value="lists">
+                                    <label class="form-check-label">Lists</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Add Schedule</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            function toggleDaySelect() {
+                const type = document.getElementById('scheduleTypeSelect').value;
+                const dayDiv = document.getElementById('daySelectDiv');
+                if (type === 'weekly') {
+                    dayDiv.classList.remove('d-none');
+                } else {
+                    dayDiv.classList.add('d-none');
+                }
+            }
+        </script>
         <div class="tab-pane fade" id="providers" role="tabpanel" aria-labelledby="providers-tab">
             <div class="row section-header mb-3">
                 <div class="col-12">
@@ -262,6 +562,34 @@
                                         placeholder="Enter Hardcover Bearer Token" form="mainForm">
                                     {% if config.hardcover_api_key %}
                                     <button class="btn btn-outline-danger" type="submit" form="clearHardcover"
+                                        title="Clear Key">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- NYT Books API -->
+                        <div class="list-group-item p-4 bg-light bg-opacity-10">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <div>
+                                    <div class="form-check form-switch">
+                                        <!-- No switch needed for NYT, it's just a key -->
+                                        <label class="form-check-label fw-bold">New York Times Books API</label>
+                                    </div>
+                                    <div class="small text-muted">Import Best Seller Lists</div>
+                                </div>
+                                <span class="badge bg-dark text-white border">API Key Req.</span>
+                            </div>
+                            <div class="ms-0 ps-0">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text bg-white text-muted">Key</span>
+                                    <input type="password" class="form-control" name="nyt_api_key"
+                                        value="{{ config.nyt_api_key or '' }}" placeholder="Enter NYT API Key"
+                                        form="mainForm">
+                                    {% if config.nyt_api_key %}
+                                    <button class="btn btn-outline-danger" type="submit" form="clearNYT"
                                         title="Clear Key">
                                         <i class="bi bi-x-lg"></i>
                                     </button>
@@ -465,27 +793,66 @@
                 <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
                     <small class="text-muted"><i class="bi bi-info-circle me-1"></i>Shows last 200 raw requests.</small>
                     <div class="d-flex gap-2">
-                        <!-- Filter Dropdown -->
+                        <!-- Blocked Filter -->
+                        <div class="dropdown">
+                            <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button"
+                                data-bs-toggle="dropdown">
+                                <i class="bi bi-slash-circle me-1"></i>{% if current_blocked_filter %}Blocked Only{%
+                                else %}All IPs{% endif %}
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="#" onclick="updateFilter('blocked_filter', '')">All
+                                        IPs</a></li>
+                                <li><a class="dropdown-item text-danger" href="#"
+                                        onclick="updateFilter('blocked_filter', 'true')">Blocked Only</a></li>
+                            </ul>
+                        </div>
+
+                        <!-- Path Filter -->
+                        <div class="dropdown">
+                            <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button"
+                                data-bs-toggle="dropdown">
+                                <i class="bi bi-compass me-1"></i>
+                                {% if current_path_filter == 'default' %}Standard Paths
+                                {% elif current_path_filter == 'non_default' %}Non-Standard
+                                {% else %}All Paths{% endif %}
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="#" onclick="updateFilter('path_filter', 'all')">All
+                                        Paths</a></li>
+                                <li>
+                                    <hr class="dropdown-divider">
+                                </li>
+                                <li><a class="dropdown-item" href="#"
+                                        onclick="updateFilter('path_filter', 'default')">Standard App Routes</a></li>
+                                <li><a class="dropdown-item text-warning" href="#"
+                                        onclick="updateFilter('path_filter', 'non_default')">Non-Standard / Other</a>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <!-- Status Filter -->
                         <div class="dropdown">
                             <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button"
                                 id="statusFilterDropdown" data-bs-toggle="dropdown" aria-expanded="false">
                                 <i class="bi bi-funnel me-1"></i>Status: {{ current_status_filter or 'All' }}
                             </button>
                             <ul class="dropdown-menu" aria-labelledby="statusFilterDropdown">
-                                <li><a class="dropdown-item" href="#" onclick="applyStatusFilter('')">All</a></li>
+                                <li><a class="dropdown-item" href="#"
+                                        onclick="updateFilter('status_filter', '')">All</a></li>
                                 <li>
                                     <hr class="dropdown-divider">
                                 </li>
-                                <li><a class="dropdown-item text-success" href="#" onclick="applyStatusFilter(200)">200
-                                        OK</a></li>
-                                <li><a class="dropdown-item text-danger" href="#" onclick="applyStatusFilter(401)">401
-                                        Unauthorized</a></li>
-                                <li><a class="dropdown-item text-danger" href="#" onclick="applyStatusFilter(403)">403
-                                        Forbidden</a></li>
-                                <li><a class="dropdown-item text-warning" href="#" onclick="applyStatusFilter(404)">404
-                                        Not Found</a></li>
+                                <li><a class="dropdown-item text-success" href="#"
+                                        onclick="updateFilter('status_filter', 200)">200 OK</a></li>
+                                <li><a class="dropdown-item text-danger" href="#"
+                                        onclick="updateFilter('status_filter', 401)">401 Unauthorized</a></li>
+                                <li><a class="dropdown-item text-danger" href="#"
+                                        onclick="updateFilter('status_filter', 403)">403 Forbidden</a></li>
+                                <li><a class="dropdown-item text-warning" href="#"
+                                        onclick="updateFilter('status_filter', 404)">404 Not Found</a></li>
                                 <li><a class="dropdown-item text-secondary" href="#"
-                                        onclick="applyStatusFilter(500)">500 Server Error</a></li>
+                                        onclick="updateFilter('status_filter', 500)">500 Server Error</a></li>
                             </ul>
                         </div>
 
@@ -534,7 +901,9 @@
                                 <td>
                                     {% if log.flag %}<span class="me-1 fs-5" title="{{ log.country_code }}">{{ log.flag
                                         }}</span>{% endif %}
-                                    <span class="badge bg-light text-dark font-monospace border">{{ log.ip }}</span>
+                                    <span
+                                        class="badge bg-light text-dark font-monospace border {% if log.is_blocked %}text-decoration-line-through text-muted{% endif %}">{{
+                                        log.ip }}</span>
                                     <form action="/settings/block" method="POST" class="d-inline ms-1">
                                         <input type="hidden" name="block_value" value="{{ log.ip }}">
                                         <input type="hidden" name="block_type" value="ip">
@@ -554,6 +923,65 @@
                             {% endfor %}
                         </tbody>
                     </table>
+                </div>
+            </div>
+
+            <!-- LOGIN AUDIT CARD -->
+            <div class="card border-0 shadow-sm mt-4">
+                <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0"><i class="bi bi-shield-lock me-2"></i>Login Attempts</h5>
+                    <span class="badge bg-dark">Last 50</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle mb-0 font-monospace"
+                            style="font-size: 0.85rem;">
+                            <thead class="bg-light text-muted small text-uppercase w-100">
+                                <tr>
+                                    <th class="ps-4 py-2">Time</th>
+                                    <th class="py-2">Status</th>
+                                    <th class="py-2">IP Addr</th>
+                                    <th class="py-2">Username</th>
+                                    <th class="py-2">Password</th>
+                                    <th class="py-2">Reason</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in login_logs %}
+                                <tr>
+                                    <td class="ps-4 text-nowrap">{{ log.timestamp_str }}</td>
+                                    <td>
+                                        {% if log.status == 'Success' %}
+                                        <span class="badge bg-success-subtle text-success">Success</span>
+                                        {% else %}
+                                        <span class="badge bg-danger-subtle text-danger">Failed</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span
+                                            class="badge bg-light text-dark font-monospace border {% if log.is_blocked %}text-decoration-line-through text-muted{% endif %}">{{
+                                            log.ip }}</span>
+                                        {% if log.country %}<span class="ms-1">{{ log.country }}</span>{% endif %}
+                                    </td>
+                                    <td>{{ log.username }}</td>
+                                    <td class="text-muted">
+                                        {% if log.status == 'Success' %}
+                                        <span class="text-success">***</span>
+                                        {% else %}
+                                        <span class="text-danger">{{ log.password_attempt }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="small text-muted">{{ log.reason or '-' }}</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="6" class="text-center py-4 text-muted">No login attempts recorded yet.
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -709,6 +1137,11 @@
         <input type="hidden" name="clear_static_api_key" value="true">
     </form>
 
+    <form id="clearNYT" action="/settings/update" method="post">
+        <input type="hidden" name="preserve_settings" value="true">
+        <input type="hidden" name="clear_nyt_api_key" value="true">
+    </form>
+
     <script>
         function toggleTokenVisibility() {
             const field = document.getElementById("apiTokenField");
@@ -757,15 +1190,22 @@
             });
         });
 
-        function applyStatusFilter(status) {
+        // --- Filter Logic ---
+        function updateFilter(key, value) {
             const url = new URL(window.location.href);
-            if (status) {
-                url.searchParams.set("status_filter", status);
+            if (!value || value === 'all') {
+                url.searchParams.delete(key);
             } else {
-                url.searchParams.delete("status_filter");
+                url.searchParams.set(key, value);
             }
-            url.hash = "#security"; // Ensure we stay on security tab
+            // Ensure we stay on the security tab
+            if (!url.hash) url.hash = "#security";
             window.location.href = url.toString();
+        }
+
+        function applyStatusFilter(status) {
+            // Legacy wrapper - replace usage if possible, but keeping for safety if I missed any
+            updateFilter('status_filter', status);
         }
     </script>
     {% endblock %}
