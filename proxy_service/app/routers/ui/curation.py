@@ -62,14 +62,16 @@ async def view_curation_list(request: Request, list_id: str):
 
     config = await get_system_settings()
 
+    notes = list_obj.get("notes", {})
     books = []
     for asin in list_obj.get("asins", []):
         cached = await get_cache(f"book_v7:{asin}")
         if cached:
             cached["authors_str"] = ", ".join(cached.get("authors", []))
+            cached["trees_notes"] = notes.get(asin, "")
             books.append(cached)
         else:
-            books.append({"asin": asin, "title": "Not cached", "authors_str": "-"})
+            books.append({"asin": asin, "title": "Not cached", "authors_str": "-", "trees_notes": notes.get(asin, "")})
 
     return templates.TemplateResponse(request, "curation.html", {
         "active_list": list_obj,

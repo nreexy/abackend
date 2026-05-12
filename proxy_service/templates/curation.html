@@ -79,14 +79,22 @@
               </td>
               <td class="text-muted small">{{ book.authors_str or '-' }}</td>
               <td>
-                <textarea
-                  class="note-field form-control form-control-sm"
-                  data-asin="{{ book.asin }}"
-                  rows="2"
-                  maxlength="500"
-                  placeholder="Add a note…"
-                  style="resize:vertical;min-height:2.5rem;font-size:0.8rem;border-color:#dee2e6;background:transparent;"
-                >{{ book.trees_notes or '' }}</textarea>
+                <div class="d-flex align-items-start gap-1">
+                  <textarea
+                    class="note-field form-control form-control-sm"
+                    data-asin="{{ book.asin }}"
+                    rows="2"
+                    maxlength="500"
+                    placeholder="Add a note…"
+                    style="resize:vertical;min-height:2.5rem;font-size:0.8rem;border-color:#dee2e6;background:transparent;"
+                  >{{ book.trees_notes or '' }}</textarea>
+                  <button
+                    class="note-save-btn btn btn-sm btn-outline-secondary flex-shrink-0"
+                    data-asin="{{ book.asin }}"
+                    title="Save note"
+                    style="display:none;padding:2px 6px;"
+                  ><i class="bi bi-check-lg"></i></button>
+                </div>
                 <div class="note-status text-muted" style="font-size:0.7rem;min-height:1rem;"></div>
               </td>
               <td class="text-end pe-3">
@@ -405,36 +413,58 @@
       });
     });
 
-    // Auto-save notes on blur
     let noteTimers = {};
     document.querySelectorAll('.note-field').forEach(ta => {
-      const statusEl = ta.nextElementSibling;
+      const asin = ta.dataset.asin;
+      const wrapper = ta.closest('td');
+      const statusEl = wrapper.querySelector('.note-status');
+      const saveBtn = wrapper.querySelector('.note-save-btn');
+      ta.dataset.original = ta.value;
 
       ta.addEventListener('input', () => {
+        const changed = ta.value !== ta.dataset.original;
+        saveBtn.style.display = changed ? '' : 'none';
         statusEl.textContent = '';
-        clearTimeout(noteTimers[ta.dataset.asin]);
-        noteTimers[ta.dataset.asin] = setTimeout(() => saveNote(ta, statusEl), 1200);
+        clearTimeout(noteTimers[asin]);
+        if (changed) {
+          noteTimers[asin] = setTimeout(() => saveNote(ta, statusEl, saveBtn), 1500);
+        }
       });
 
       ta.addEventListener('blur', () => {
-        clearTimeout(noteTimers[ta.dataset.asin]);
-        saveNote(ta, statusEl);
+        if (ta.value === ta.dataset.original) return;
+        clearTimeout(noteTimers[asin]);
+        saveNote(ta, statusEl, saveBtn);
+      });
+
+      saveBtn.addEventListener('click', () => {
+        clearTimeout(noteTimers[asin]);
+        saveNote(ta, statusEl, saveBtn);
       });
     });
 
-    async function saveNote(ta, statusEl) {
+    async function saveNote(ta, statusEl, saveBtn) {
       const asin = ta.dataset.asin;
       const note = ta.value;
+      if (saveBtn) saveBtn.disabled = true;
       try {
         const res = await fetch(`/curation/lists/${LIST_ID}/items/${asin}/note`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ note })
         });
-        statusEl.textContent = res.ok ? '✓ saved' : '⚠ error';
+        if (res.ok) {
+          ta.dataset.original = note;
+          if (saveBtn) saveBtn.style.display = 'none';
+          statusEl.textContent = '✓ saved';
+        } else {
+          statusEl.textContent = '⚠ error';
+        }
         setTimeout(() => { statusEl.textContent = ''; }, 2000);
       } catch {
         statusEl.textContent = '⚠ error';
+      } finally {
+        if (saveBtn) saveBtn.disabled = false;
       }
     }
   </script>
