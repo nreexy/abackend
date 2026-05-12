@@ -20,7 +20,7 @@ router = APIRouter()
 async def setup_page(request: Request):
     if await get_active_password_hash():
         return RedirectResponse(url="/login", status_code=303)
-    return templates.TemplateResponse("setup.html", {"request": request})
+    return templates.TemplateResponse(request, "setup.html")
 
 @router.post("/setup")
 async def setup_action(
@@ -32,10 +32,10 @@ async def setup_action(
         return RedirectResponse(url="/login", status_code=303)
 
     if password != confirm_password:
-        return templates.TemplateResponse("setup.html", {"request": request, "error": "Passwords do not match"})
+        return templates.TemplateResponse(request, "setup.html", {"error": "Passwords do not match"})
     
     if len(password) < 8:
-        return templates.TemplateResponse("setup.html", {"request": request, "error": "Password must be at least 8 characters"})
+        return templates.TemplateResponse(request, "setup.html", {"error": "Password must be at least 8 characters"})
 
     # Hash and Save
     pw_hash = get_password_hash(password)
@@ -55,7 +55,7 @@ async def login_page(request: Request):
     if await check_password_reset_file():
         return RedirectResponse(url="/setup?reset=true", status_code=303)
         
-    return templates.TemplateResponse("login.html", {"request": request})
+    return templates.TemplateResponse(request, "login.html")
 
 @router.post("/login")
 @limiter.limit("5/minute")
@@ -105,7 +105,7 @@ async def login(request: Request, response: Response, username: str = Form(...),
         await log_login_attempt(client_ip, user_agent, username, password, "Failed", "Invalid Credentials")
         
         await LoginGuard.record_failure(request)
-        return templates.TemplateResponse("login.html", {"request": request, "error": "Invalid Username or Password"})
+        return templates.TemplateResponse(request, "login.html", {"error": "Invalid Username or Password"})
 
 @router.get("/logout")
 async def logout():

@@ -19,7 +19,7 @@ router = APIRouter()
 async def dashboard(request: Request):
     if not await check_ui_auth(request): return RedirectResponse("/login")
     stats = await get_dashboard_stats()
-    return templates.TemplateResponse("dashboard.html", {"request": request, "stats": stats, "active_page": "dashboard"})
+    return templates.TemplateResponse(request, "dashboard.html", {"stats": stats, "active_page": "dashboard"})
 
 @router.get("/analytics")
 async def view_analytics(request: Request):
@@ -28,9 +28,8 @@ async def view_analytics(request: Request):
     traffic_data = await get_traffic_stats()
     performance_data = await get_detailed_stats()
     
-    return templates.TemplateResponse("analytics.html", {
-        "request": request, 
-        "traffic": traffic_data, 
+    return templates.TemplateResponse(request, "analytics.html", {
+        "traffic": traffic_data,
         "performance": performance_data,
         "active_page": "analytics"
     })
@@ -49,8 +48,7 @@ async def view_details_redirect(request: Request):
 async def view_documentation(request: Request):
     if not await check_ui_auth(request): return RedirectResponse("/login")
     
-    return templates.TemplateResponse("documentation.html", {
-        "request": request, 
+    return templates.TemplateResponse(request, "documentation.html", {
         "active_page": "documentation"
     })
 
@@ -63,8 +61,7 @@ async def view_database_explorer(request: Request):
     collections = await get_collection_names()
     collections.sort()
     
-    return templates.TemplateResponse("database.html", {
-        "request": request, 
+    return templates.TemplateResponse(request, "database.html", {
         "active_page": "database",
         "collections": collections
     })

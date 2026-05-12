@@ -24,8 +24,7 @@ async def view_curation(request: Request):
 
     config = await get_system_settings()
 
-    return templates.TemplateResponse("curation.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "curation.html", {
         "lists": curated,
         "config": config,
         "active_page": "curation",
@@ -71,8 +70,7 @@ async def view_curation_list(request: Request, list_id: str):
         else:
             books.append({"asin": asin, "title": "Not cached", "authors_str": "-"})
 
-    return templates.TemplateResponse("curation.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "curation.html", {
         "active_list": list_obj,
         "books": books,
         "config": config,

@@ -62,14 +62,13 @@ async def view_settings(
     backup_history = await get_backup_history(limit=20)
     backup_jobs = await backup_jobs_collection.find().to_list(length=None)
     
-    return templates.TemplateResponse("settings.html", {
-        "request": request, 
-        "config": config, 
+    return templates.TemplateResponse(request, "settings.html", {
+        "config": config,
         "active_page": "settings",
         "api_token": token,
-        "system_logs": system_logs, 
+        "system_logs": system_logs,
         "access_logs": access_logs,
-        "login_logs": login_logs, 
+        "login_logs": login_logs,
         "current_status_filter": status_filter,
         "current_blocked_filter": blocked_filter,
         "current_path_filter": path_filter,

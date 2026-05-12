@@ -65,14 +65,13 @@ async def view_library(
     params_dict = {k: v for k, v in filters.items() if v is not None}
     filter_params = "&" + urlencode(params_dict) if params_dict else ""
 
-    return templates.TemplateResponse("library.html", {
-        "request": request, 
-        "books": books, 
+    return templates.TemplateResponse(request, "library.html", {
+        "books": books,
         "active_page": "library",
         "current_page": page,
         "total_pages": total_pages,
         "total_count": total_count,
-        "filters": filters, 
+        "filters": filters,
         "filter_params": filter_params
     })
 
@@ -113,8 +112,7 @@ async def view_detail_page(request: Request, asin: Optional[str] = None):
     if book:
         book = json.loads(json.dumps(book, default=json_serial))
 
-    return templates.TemplateResponse("detail_view.html", {
-        "request": request, 
+    return templates.TemplateResponse(request, "detail_view.html", {
         "book": book,
         "active_page": "detail_view"
     })
@@ -125,7 +123,7 @@ async def view_detail_page(request: Request, asin: Optional[str] = None):
 async def view_lists(request: Request):
     if not await check_ui_auth(request): return RedirectResponse("/login")
     lists = await get_all_lists()
-    return templates.TemplateResponse("lists.html", {"request": request, "lists": lists, "active_page": "lists"})
+    return templates.TemplateResponse(request, "lists.html", {"lists": lists, "active_page": "lists"})
 
 @router.get("/lists/{list_id}")
 async def view_list_detail(request: Request, list_id: str):
@@ -148,7 +146,7 @@ async def view_list_detail(request: Request, list_id: str):
     if 'items' in list_obj:
         books.extend(list_obj['items'])
             
-    return templates.TemplateResponse("list_detail.html", {"request": request, "list": list_obj, "books": books, "active_page": "lists"})
+    return templates.TemplateResponse(request, "list_detail.html", {"list": list_obj, "books": books, "active_page": "lists"})
 
 @router.post("/lists/delete")
 async def delete_list_action(request: Request, list_id: str = Form(...)):
@@ -167,8 +165,7 @@ async def view_search_ui(request: Request):
     if not await check_ui_auth(request): return RedirectResponse("/login")
     
     config = await get_system_settings()
-    return templates.TemplateResponse("search_ui.html", {
-        "request": request, 
-        "config": config, 
+    return templates.TemplateResponse(request, "search_ui.html", {
+        "config": config,
         "active_page": "search"
     })
