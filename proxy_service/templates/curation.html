@@ -18,7 +18,16 @@
         <i class="bi bi-pencil"></i>
       </button>
     </div>
-    <div class="d-flex gap-2">
+    <div class="d-flex gap-2 align-items-center">
+      {% if active_list.hidden %}
+      <span class="badge bg-secondary" title="Hidden from API responses"><i class="bi bi-eye-slash me-1"></i>Hidden</span>
+      {% endif %}
+      {% if active_list.language %}
+      <span class="badge bg-info text-dark"><i class="bi bi-translate me-1"></i>{{ active_list.language }}</span>
+      {% endif %}
+      <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#listSettingsModal" title="List settings">
+        <i class="bi bi-sliders"></i>
+      </button>
       <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addBookModal">
         <i class="bi bi-plus-lg"></i> Add Books
       </button>
@@ -32,6 +41,9 @@
   <p class="text-muted small mb-3">
     <i class="bi bi-book"></i> {{ active_list.count }} books &nbsp;·&nbsp;
     <i class="bi bi-calendar3"></i> Created {{ active_list.created_at.strftime('%Y-%m-%d') }}
+    {% if active_list.updated_at %}
+    &nbsp;·&nbsp; <i class="bi bi-pencil"></i> Edited {{ active_list.updated_at.strftime('%Y-%m-%d') }}
+    {% endif %}
   </p>
 
   <!-- Books Table -->
@@ -45,7 +57,7 @@
               <th style="width:60px;"></th>
               <th>Title</th>
               <th>Author</th>
-              <th class="text-center">Rating</th>
+              <th style="min-width:220px;">Tree's Notes</th>
               <th class="text-end pe-3">Actions</th>
             </tr>
           </thead>
@@ -62,16 +74,20 @@
                 {% endif %}
               </td>
               <td>
-                <div class="fw-semibold text-truncate" style="max-width:320px;" title="{{ book.title }}">{{ book.title }}</div>
+                <div class="fw-semibold text-truncate" style="max-width:280px;" title="{{ book.title }}">{{ book.title }}</div>
                 <div class="text-muted small">{{ book.asin }}</div>
               </td>
               <td class="text-muted small">{{ book.authors_str or '-' }}</td>
-              <td class="text-center">
-                {% if book.rating %}
-                <span class="text-warning fw-bold">★ {{ "%.1f"|format(book.rating) }}</span>
-                {% else %}
-                <span class="text-muted">—</span>
-                {% endif %}
+              <td>
+                <textarea
+                  class="note-field form-control form-control-sm"
+                  data-asin="{{ book.asin }}"
+                  rows="2"
+                  maxlength="500"
+                  placeholder="Add a note…"
+                  style="resize:vertical;min-height:2.5rem;font-size:0.8rem;border-color:#dee2e6;background:transparent;"
+                >{{ book.trees_notes or '' }}</textarea>
+                <div class="note-status text-muted" style="font-size:0.7rem;min-height:1rem;"></div>
               </td>
               <td class="text-end pe-3">
                 <a href="/detail_view?asin={{ book.asin }}" class="btn btn-sm btn-outline-secondary me-1" title="View Details">
@@ -183,6 +199,41 @@
     </div>
   </div>
 
+  <!-- List Settings Modal -->
+  <div class="modal fade" id="listSettingsModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <form action="/curation/{{ active_list._id }}/settings" method="post">
+          <div class="modal-header">
+            <h5 class="modal-title"><i class="bi bi-sliders me-2"></i>List Settings</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Language</label>
+              <input type="text" class="form-control" name="language"
+                value="{{ active_list.language or '' }}"
+                placeholder="e.g. en, de, fr">
+              <div class="form-text">Used in API responses to identify the list's primary language.</div>
+            </div>
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" name="hidden" value="true" id="hiddenToggle"
+                {% if active_list.hidden %}checked{% endif %}>
+              <label class="form-check-label" for="hiddenToggle">
+                <strong>Hide from API</strong>
+                <div class="text-muted small">When enabled, this list is excluded from <code>GET /curation/lists</code> responses unless <code>include_hidden=true</code> is passed.</div>
+              </label>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <!-- Rename Modal -->
   <div class="modal fade" id="renameModal" tabindex="-1">
     <div class="modal-dialog">
@@ -252,25 +303,53 @@
       container.innerHTML = '';
 
       books.forEach(book => {
-        const cover = book.cover || '';
         const authors = book.authors ? book.authors.join(', ') : (book.author || 'Unknown');
         const rating = book.rating ? `★ ${book.rating.toFixed(1)}` : '';
 
         const row = document.createElement('div');
         row.className = 'd-flex align-items-center gap-3 p-2 border-bottom hover-bg';
-        row.innerHTML = `
-          ${cover
-            ? `<img src="${cover}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;flex-shrink:0;" alt="cover">`
-            : `<div style="width:40px;height:40px;background:#e9ecef;border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;"><i class="bi bi-book text-muted"></i></div>`
-          }
-          <div class="flex-grow-1 overflow-hidden">
-            <div class="fw-semibold text-truncate">${book.title}</div>
-            <div class="text-muted small text-truncate">${authors} ${rating ? '· ' + rating : ''}</div>
-          </div>
-          <button class="btn btn-sm btn-outline-primary flex-shrink-0" onclick="addBook('${book.asin}', this)">
-            <i class="bi bi-plus-lg"></i> Add
-          </button>
-        `;
+
+        // Cover image — src set via setAttribute, never via innerHTML interpolation
+        const coverEl = document.createElement('div');
+        coverEl.style.cssText = 'width:40px;height:40px;flex-shrink:0;border-radius:4px;overflow:hidden;';
+        if (book.cover) {
+          const img = document.createElement('img');
+          img.setAttribute('src', book.cover);
+          img.setAttribute('alt', 'cover');
+          img.style.cssText = 'width:100%;height:100%;object-fit:cover;';
+          coverEl.appendChild(img);
+        } else {
+          coverEl.style.cssText += 'background:#e9ecef;display:flex;align-items:center;justify-content:center;';
+          const icon = document.createElement('i');
+          icon.className = 'bi bi-book text-muted';
+          coverEl.appendChild(icon);
+        }
+
+        // Text block — textContent prevents any HTML injection
+        const textEl = document.createElement('div');
+        textEl.className = 'flex-grow-1 overflow-hidden';
+
+        const titleEl = document.createElement('div');
+        titleEl.className = 'fw-semibold text-truncate';
+        titleEl.textContent = book.title;
+
+        const metaEl = document.createElement('div');
+        metaEl.className = 'text-muted small text-truncate';
+        metaEl.textContent = rating ? `${authors} · ${rating}` : authors;
+
+        textEl.appendChild(titleEl);
+        textEl.appendChild(metaEl);
+
+        // Add button — asin stored in data attribute, handler attached via addEventListener
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-sm btn-outline-primary flex-shrink-0';
+        btn.dataset.asin = book.asin;
+        btn.innerHTML = '<i class="bi bi-plus-lg"></i> Add';
+        btn.addEventListener('click', function () { addBook(this.dataset.asin, this); });
+
+        row.appendChild(coverEl);
+        row.appendChild(textEl);
+        row.appendChild(btn);
         container.appendChild(row);
       });
     }
@@ -325,6 +404,39 @@
         if (e.key === 'Enter') searchBooks();
       });
     });
+
+    // Auto-save notes on blur
+    let noteTimers = {};
+    document.querySelectorAll('.note-field').forEach(ta => {
+      const statusEl = ta.nextElementSibling;
+
+      ta.addEventListener('input', () => {
+        statusEl.textContent = '';
+        clearTimeout(noteTimers[ta.dataset.asin]);
+        noteTimers[ta.dataset.asin] = setTimeout(() => saveNote(ta, statusEl), 1200);
+      });
+
+      ta.addEventListener('blur', () => {
+        clearTimeout(noteTimers[ta.dataset.asin]);
+        saveNote(ta, statusEl);
+      });
+    });
+
+    async function saveNote(ta, statusEl) {
+      const asin = ta.dataset.asin;
+      const note = ta.value;
+      try {
+        const res = await fetch(`/curation/lists/${LIST_ID}/items/${asin}/note`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ note })
+        });
+        statusEl.textContent = res.ok ? '✓ saved' : '⚠ error';
+        setTimeout(() => { statusEl.textContent = ''; }, 2000);
+      } catch {
+        statusEl.textContent = '⚠ error';
+      }
+    }
   </script>
 
   {% else %}
@@ -344,8 +456,16 @@
       <div class="card h-100 shadow-sm border-0">
         <div class="card-body">
           <div class="d-flex justify-content-between align-items-start mb-2">
-            <h5 class="card-title text-truncate mb-0" style="max-width:80%;" title="{{ lst.name }}">{{ lst.name }}</h5>
-            <span class="badge bg-secondary"><i class="bi bi-stars me-1"></i>Curated</span>
+            <h5 class="card-title text-truncate mb-0" style="max-width:75%;" title="{{ lst.name }}">{{ lst.name }}</h5>
+            <div class="d-flex gap-1 flex-wrap justify-content-end">
+              {% if lst.hidden %}
+              <span class="badge bg-secondary" title="Hidden from API"><i class="bi bi-eye-slash"></i></span>
+              {% endif %}
+              {% if lst.language %}
+              <span class="badge bg-info text-dark">{{ lst.language }}</span>
+              {% endif %}
+              <span class="badge bg-light text-dark border"><i class="bi bi-stars me-1"></i>Curated</span>
+            </div>
           </div>
           <p class="text-muted small mt-2 mb-3">
             <i class="bi bi-book me-1"></i>{{ lst.count }} books

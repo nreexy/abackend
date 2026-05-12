@@ -21,11 +21,24 @@ async def create_custom_list(name: str, asins: list):
     doc = {
         "name": name, "url": internal_id, "asins": asins, "count": len(asins),
         "type": "custom", "source": "Custom",
+        "language": None, "hidden": False,
         "created_at": datetime.datetime.utcnow(),
         "updated_at": datetime.datetime.utcnow()
     }
     await lists_collection.insert_one(doc)
     return internal_id
+
+async def update_list_metadata(list_id: str, language: str = None, hidden: bool = None):
+    fields = {"updated_at": datetime.datetime.utcnow()}
+    if language is not None:
+        fields["language"] = language or None
+    if hidden is not None:
+        fields["hidden"] = hidden
+    try:
+        await lists_collection.update_one({"_id": ObjectId(list_id)}, {"$set": fields})
+        return True
+    except:
+        return False
 
 async def get_all_lists():
     return await lists_collection.find().sort("created_at", -1).to_list(length=None)
@@ -48,6 +61,23 @@ async def update_list_name(list_id: str, new_name: str):
         )
         return True
     except: return False
+
+async def set_item_note(list_id: str, asin: str, note: str):
+    try:
+        await lists_collection.update_one(
+            {"_id": ObjectId(list_id)},
+            {"$set": {f"notes.{asin}": note.strip(), "updated_at": datetime.datetime.utcnow()}}
+        )
+        return True
+    except:
+        return False
+
+async def get_item_note(list_id: str, asin: str) -> str:
+    try:
+        doc = await lists_collection.find_one({"_id": ObjectId(list_id)}, {"notes": 1})
+        return (doc or {}).get("notes", {}).get(asin, "")
+    except:
+        return ""
 
 async def add_item_to_list(list_id: str, asin: str):
     try:

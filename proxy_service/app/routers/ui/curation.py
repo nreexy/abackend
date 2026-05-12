@@ -6,6 +6,7 @@ from app.database import (
     get_list_by_id,
     delete_list_by_id,
     create_custom_list,
+    update_list_metadata,
     get_cache,
     get_system_settings,
 )
@@ -92,4 +93,17 @@ async def rename_curation_list(request: Request, list_id: str, name: str = Form(
         return RedirectResponse("/login")
     from app.database import update_list_name
     await update_list_name(list_id, name.strip())
+    return RedirectResponse(f"/curation/{list_id}", status_code=303)
+
+
+@router.post("/curation/{list_id}/settings")
+async def update_curation_list_settings(
+    request: Request,
+    list_id: str,
+    language: str = Form(""),
+    hidden: bool = Form(False),
+):
+    if not await check_ui_auth(request):
+        return RedirectResponse("/login")
+    await update_list_metadata(list_id, language=language.strip(), hidden=hidden)
     return RedirectResponse(f"/curation/{list_id}", status_code=303)

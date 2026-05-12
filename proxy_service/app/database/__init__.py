@@ -86,12 +86,15 @@ from .blocklist import (
 )
 
 from .lists import (
-    save_imported_list, 
-    create_custom_list, 
-    get_all_lists, 
-    get_list_by_id, 
+    save_imported_list,
+    create_custom_list,
+    get_all_lists,
+    get_list_by_id,
     delete_list_by_id,
     update_list_name,
+    update_list_metadata,
+    set_item_note,
+    get_item_note,
     add_item_to_list,
     remove_item_from_list
 )

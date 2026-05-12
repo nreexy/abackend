@@ -25,6 +25,8 @@ from app.database import (
     get_list_by_id,
     delete_list_by_id,
     update_list_name,
+    update_list_metadata,
+    set_item_note,
     add_item_to_list,
     remove_item_from_list,
     redis_client,
@@ -85,6 +87,10 @@ class CuratedListItem(BaseModel):
     language: Optional[str] = None
     sample_url: Optional[str] = None
     series_str: Optional[str] = None
+    trees_notes: Optional[str] = None
+
+class SetNoteRequest(BaseModel):
+    note: str
 
 class ListItemsResponse(BaseModel):
     items: List[Union[ListItemEnhanced, ListItemDefault]]
@@ -751,21 +757,28 @@ async def add_custom_fields(data: CustomFieldsRequest):
 # --- 6. CURATION ENDPOINTS ---
 
 @router.get("/curation/lists")
-async def list_curated_lists():
+async def list_curated_lists(include_hidden: bool = Query(False)):
     """
-    Returns all custom/curated lists.
+    Returns all custom/curated lists. Hidden lists are excluded by default.
+    Pass include_hidden=true to include them.
     """
     all_lists = await get_all_lists()
-    # Filter for custom lists
-    return [
-        {
+    result = []
+    for l in all_lists:
+        if l.get("type") != "custom":
+            continue
+        if not include_hidden and l.get("hidden", False):
+            continue
+        result.append({
             "id": str(l.get("_id")),
             "name": l.get("name"),
+            "language": l.get("language"),
+            "hidden": l.get("hidden", False),
             "count": l.get("count", 0),
-            "created_at": l.get("created_at").isoformat() if l.get("created_at") else None
-        }
-        for l in all_lists if l.get("type") == "custom"
-    ]
+            "created_at": l.get("created_at").isoformat() if l.get("created_at") else None,
+            "updated_at": l.get("updated_at").isoformat() if l.get("updated_at") else None,
+        })
+    return result
 
 @router.delete("/curation/lists/{list_id}")
 async def delete_curated_list(list_id: str):
@@ -786,6 +799,14 @@ async def remove_item_from_curated_list(list_id: str, asin: str):
     success = await remove_item_from_list(list_id, asin)
     if not success:
         raise HTTPException(status_code=400, detail="Failed to remove item")
+    return {"status": "success"}
+
+@router.put("/curation/lists/{list_id}/items/{asin}/note")
+async def set_curated_item_note(list_id: str, asin: str, data: SetNoteRequest):
+    """Set or clear the trees_notes field for a specific item in a curated list."""
+    success = await set_item_note(list_id, asin, data.note)
+    if not success:
+        raise HTTPException(status_code=400, detail="Failed to save note")
     return {"status": "success"}
 
 @router.get("/curation/lists/{list_id}/items")
@@ -819,13 +840,16 @@ async def get_curated_list_items(
 
     results = await asyncio.gather(*[fetch_item(a) for a in page_asins])
 
+    notes = list_obj.get("notes", {})
+
     items = []
     for data in results:
         series = data.get("series", [])
         series_str = f"{series[0].get('name')} #{series[0].get('sequence')}" if series else None
+        asin = data.get("asin", "Unknown")
 
         items.append(CuratedListItem(
-            asin=data.get("asin", "Unknown"),
+            asin=asin,
             title=data.get("title", "Unknown"),
             subtitle=data.get("subtitle"),
             authors=data.get("authors", []),
@@ -840,9 +864,19 @@ async def get_curated_list_items(
             language=data.get("language"),
             sample_url=data.get("sample_url"),
             series_str=series_str,
+            trees_notes=notes.get(asin) or None,
         ))
 
-    return {"items": items, "total_count": total_count, "page": page, "total_pages": total_pages}
+    return {
+        "list_id": list_id,
+        "name": list_obj.get("name"),
+        "language": list_obj.get("language"),
+        "updated_at": list_obj.get("updated_at").isoformat() if list_obj.get("updated_at") else None,
+        "items": items,
+        "total_count": total_count,
+        "page": page,
+        "total_pages": total_pages,
+    }
 
 @router.patch("/curation/lists/{list_id}")
 async def rename_curated_list(list_id: str, data: dict):
