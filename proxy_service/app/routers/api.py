@@ -29,6 +29,7 @@ from app.database import (
     set_item_note,
     add_item_to_list,
     remove_item_from_list,
+    get_books_from_db_batch,
     redis_client,
     increment_book_access
 )
@@ -760,8 +761,18 @@ async def add_custom_fields(data: CustomFieldsRequest):
 async def list_curated_lists(include_hidden: bool = Query(False)):
     """
     Returns all custom/curated lists. Hidden lists are excluded by default.
-    Pass include_hidden=true to include them.
+    Cached in Redis; invalidated automatically on any list mutation.
     """
+    from app.database.lists import CURATION_LISTS_CACHE_KEY
+    import json
+
+    # Only cache the default (no hidden) variant — that's the hot path
+    use_cache = not include_hidden
+    if use_cache:
+        raw = await redis_client.get(CURATION_LISTS_CACHE_KEY)
+        if raw:
+            return json.loads(raw)
+
     all_lists = await get_all_lists()
     result = []
     for l in all_lists:
@@ -778,6 +789,10 @@ async def list_curated_lists(include_hidden: bool = Query(False)):
             "created_at": l.get("created_at").isoformat() if l.get("created_at") else None,
             "updated_at": l.get("updated_at").isoformat() if l.get("updated_at") else None,
         })
+
+    if use_cache:
+        await redis_client.set(CURATION_LISTS_CACHE_KEY, json.dumps(result), ex=86400)
+
     return result
 
 @router.delete("/curation/lists/{list_id}")
@@ -817,7 +832,17 @@ async def get_curated_list_items(
 ):
     """
     Return items from a curated (custom) list with full book metadata.
+    Full response is cached in Redis; invalidated on any list mutation.
+    Book lookups use a single Redis MGET + one MongoDB $in batch for cache misses.
     """
+    import json
+    from app.database.lists import _items_cache_key
+
+    cache_key = _items_cache_key(list_id, page, limit)
+    raw = await redis_client.get(cache_key)
+    if raw:
+        return json.loads(raw)
+
     list_obj = await get_list_by_id(list_id)
     if not list_obj:
         raise HTTPException(status_code=404, detail="List not found")
@@ -829,24 +854,47 @@ async def get_curated_list_items(
     start = (page - 1) * limit
     page_asins = all_asins[start:start + limit]
 
-    async def fetch_item(asin):
-        cache_key = f"book_v7:{asin}"
-        if cached := await get_cache(cache_key):
-            return cached
-        if stored := await get_book_from_db(asin):
-            await set_cache(cache_key, stored)
-            return stored
-        return {"asin": asin, "title": "Unknown Title", "authors": []}
+    # --- Batch Redis lookup (single MGET round-trip) ---
+    book_cache_keys = [f"book_v7:{a}" for a in page_asins]
+    redis_values = await redis_client.mget(*book_cache_keys) if book_cache_keys else []
 
-    results = await asyncio.gather(*[fetch_item(a) for a in page_asins])
+    books_by_asin = {}
+    missing_asins = []
+    for asin, raw_book in zip(page_asins, redis_values):
+        if raw_book:
+            books_by_asin[asin] = json.loads(raw_book)
+        else:
+            missing_asins.append(asin)
+
+    # --- Single MongoDB $in for all cache misses ---
+    if missing_asins:
+        db_books = await get_books_from_db_batch(missing_asins)
+        # Back-fill Redis and collect results
+        pipe_data = {}
+        for asin in missing_asins:
+            doc = db_books.get(asin)
+            if doc:
+                books_by_asin[asin] = doc
+                pipe_data[f"book_v7:{asin}"] = doc
+            else:
+                books_by_asin[asin] = {"asin": asin, "title": "Unknown Title", "authors": []}
+
+        # Write all missing books back to Redis in a pipeline
+        if pipe_data:
+            def _serial(obj):
+                if isinstance(obj, (datetime.datetime, datetime.date)): return obj.isoformat()
+                raise TypeError
+            pipe = redis_client.pipeline()
+            for k, v in pipe_data.items():
+                pipe.set(k, json.dumps(v, default=_serial), ex=86400)
+            await pipe.execute()
 
     notes = list_obj.get("notes", {})
-
     items = []
-    for data in results:
+    for asin in page_asins:
+        data = books_by_asin.get(asin, {"asin": asin, "title": "Unknown Title", "authors": []})
         series = data.get("series", [])
         series_str = f"{series[0].get('name')} #{series[0].get('sequence')}" if series else None
-        asin = data.get("asin", "Unknown")
 
         items.append(CuratedListItem(
             asin=asin,
@@ -867,16 +915,19 @@ async def get_curated_list_items(
             trees_notes=notes.get(asin) or None,
         ))
 
-    return {
+    response = {
         "list_id": list_id,
         "name": list_obj.get("name"),
         "language": list_obj.get("language"),
         "updated_at": list_obj.get("updated_at").isoformat() if list_obj.get("updated_at") else None,
-        "items": items,
+        "items": [i.dict() for i in items],
         "total_count": total_count,
         "page": page,
         "total_pages": total_pages,
     }
+
+    await redis_client.set(cache_key, json.dumps(response), ex=86400)
+    return response
 
 @router.patch("/curation/lists/{list_id}")
 async def rename_curated_list(list_id: str, data: dict):

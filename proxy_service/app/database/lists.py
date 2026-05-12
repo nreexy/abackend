@@ -1,7 +1,21 @@
 import datetime
 import uuid
 from bson.objectid import ObjectId
-from .core import lists_collection
+from .core import lists_collection, redis_client
+
+CURATION_LISTS_CACHE_KEY = "curation:lists:v1"
+
+def _items_cache_key(list_id: str, page: int, limit: int) -> str:
+    return f"curation:items:v1:{list_id}:p{page}:l{limit}"
+
+async def _invalidate_list_caches(list_id: str):
+    """Delete the lists overview cache and all pages of this list's items cache."""
+    await redis_client.delete(CURATION_LISTS_CACHE_KEY)
+    # Delete all cached pages for this list via a scan on the prefix
+    prefix = f"curation:items:v1:{list_id}:*"
+    keys = [k async for k in redis_client.scan_iter(prefix)]
+    if keys:
+        await redis_client.delete(*keys)
 
 # --- LISTS LOGIC ---
 
@@ -36,6 +50,7 @@ async def update_list_metadata(list_id: str, language: str = None, hidden: bool 
         fields["hidden"] = hidden
     try:
         await lists_collection.update_one({"_id": ObjectId(list_id)}, {"$set": fields})
+        await _invalidate_list_caches(list_id)
         return True
     except:
         return False
@@ -50,6 +65,7 @@ async def get_list_by_id(list_id: str):
 async def delete_list_by_id(list_id: str):
     try:
         await lists_collection.delete_one({"_id": ObjectId(list_id)})
+        await _invalidate_list_caches(list_id)
         return True
     except: return False
 
@@ -59,6 +75,7 @@ async def update_list_name(list_id: str, new_name: str):
             {"_id": ObjectId(list_id)},
             {"$set": {"name": new_name, "updated_at": datetime.datetime.utcnow()}}
         )
+        await _invalidate_list_caches(list_id)
         return True
     except: return False
 
@@ -68,6 +85,7 @@ async def set_item_note(list_id: str, asin: str, note: str):
             {"_id": ObjectId(list_id)},
             {"$set": {f"notes.{asin}": note.strip(), "updated_at": datetime.datetime.utcnow()}}
         )
+        await _invalidate_list_caches(list_id)
         return True
     except:
         return False
@@ -81,39 +99,40 @@ async def get_item_note(list_id: str, asin: str) -> str:
 
 async def add_item_to_list(list_id: str, asin: str):
     try:
-        await lists_collection.update_one(
+        updated = await lists_collection.find_one_and_update(
             {"_id": ObjectId(list_id)},
             {
                 "$addToSet": {"asins": asin},
-                "$inc": {"count": 1},
                 "$set": {"updated_at": datetime.datetime.utcnow()}
-            }
+            },
+            return_document=True,
+            projection={"asins": 1}
         )
-        # Recalculate count to be safe
-        doc = await lists_collection.find_one({"_id": ObjectId(list_id)})
-        if doc:
+        if updated:
             await lists_collection.update_one(
                 {"_id": ObjectId(list_id)},
-                {"$set": {"count": len(doc.get("asins", []))}}
+                {"$set": {"count": len(updated.get("asins", []))}}
             )
+        await _invalidate_list_caches(list_id)
         return True
     except: return False
 
 async def remove_item_from_list(list_id: str, asin: str):
     try:
-        await lists_collection.update_one(
+        updated = await lists_collection.find_one_and_update(
             {"_id": ObjectId(list_id)},
             {
                 "$pull": {"asins": asin},
                 "$set": {"updated_at": datetime.datetime.utcnow()}
-            }
+            },
+            return_document=True,
+            projection={"asins": 1}
         )
-        # Recalculate count
-        doc = await lists_collection.find_one({"_id": ObjectId(list_id)})
-        if doc:
+        if updated:
             await lists_collection.update_one(
                 {"_id": ObjectId(list_id)},
-                {"$set": {"count": len(doc.get("asins", []))}}
+                {"$set": {"count": len(updated.get("asins", []))}}
             )
+        await _invalidate_list_caches(list_id)
         return True
     except: return False

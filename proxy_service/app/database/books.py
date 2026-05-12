@@ -42,6 +42,13 @@ async def upsert_book_to_db(book_data: dict):
 async def get_book_from_db(asin: str):
     return await books_collection.find_one({"asin": asin}, {"_id": 0})
 
+async def get_books_from_db_batch(asins: list) -> dict:
+    """Fetch multiple books in one MongoDB query. Returns {asin: doc}."""
+    if not asins:
+        return {}
+    cursor = books_collection.find({"asin": {"$in": asins}}, {"_id": 0})
+    return {doc["asin"]: doc for doc in await cursor.to_list(length=len(asins))}
+
 async def get_library_page(page: int = 1, limit: int = 50, sort_by: str = "added_at", order: int = -1, filters: dict = None):
     """
     Paginated fetch with filtering.
@@ -90,16 +97,41 @@ async def delete_book_from_library(asin: str):
 
 async def increment_book_access(asin: str):
     """
-    Atomically increments the access_count and updates last_accessed.
+    Increments access_count in MongoDB and patches the Redis cache to match.
     """
+    import json
+    from .core import CACHE_TTL
     now = datetime.datetime.utcnow()
-    await books_collection.update_one(
+
+    # 1. Increment in MongoDB and get the updated document
+    updated = await books_collection.find_one_and_update(
         {"asin": asin},
         {
             "$inc": {"access_count": 1},
             "$set": {"last_accessed": now}
-        }
+        },
+        return_document=True,
+        projection={"access_count": 1, "_id": 0}
     )
+    if not updated:
+        return
+
+    new_count = updated.get("access_count", 1)
+    now_str = now.isoformat()
+
+    # 2. Patch the Redis cache in-place so reads immediately see the new values
+    cache_key = f"book_v7:{asin}"
+    raw = await redis_client.get(cache_key)
+    if raw:
+        try:
+            cached = json.loads(raw)
+            cached["access_count"] = new_count
+            cached["last_accessed"] = now_str
+            ttl = await redis_client.ttl(cache_key)
+            expire = ttl if ttl and ttl > 0 else CACHE_TTL
+            await redis_client.set(cache_key, json.dumps(cached), ex=expire)
+        except Exception:
+            pass
 
 async def search_library_books(query: str, limit: int = 10):
     """

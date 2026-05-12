@@ -33,11 +33,12 @@ from .audible import (
 
 from .books import (
     init_db_indexes,
-    upsert_book_to_db, 
-    get_book_from_db, 
-    get_library_page, 
-    delete_book_from_library, 
-    increment_book_access, 
+    upsert_book_to_db,
+    get_book_from_db,
+    get_books_from_db_batch,
+    get_library_page,
+    delete_book_from_library,
+    increment_book_access,
     search_library_books,
     get_custom_fields,
     save_custom_fields,
