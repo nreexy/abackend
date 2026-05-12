@@ -23,8 +23,12 @@ from app.database import (
     get_book_from_db,
     get_all_lists,
     get_list_by_id,
+    delete_list_by_id,
+    update_list_name,
+    add_item_to_list,
+    remove_item_from_list,
     redis_client,
-    increment_book_access # <--- NEW IMPORT
+    increment_book_access
 )
 from app.services import audible, itunes, goodreads, compiler, prh, google_books, hardcover, unifier
 from app.auth import get_current_user
@@ -44,6 +48,9 @@ class ImportListRequest(BaseModel):
 class CreateListRequest(BaseModel):
     name: str
     asins: List[str]
+
+class AddListItemRequest(BaseModel):
+    asin: str
 
 class ImportedListResponse(BaseModel):
     name: str
@@ -271,7 +278,8 @@ async def search_audiobook(
 
         if use_audible:
             async def run_audible():
-                raw = await asyncio.to_thread(audible.search_raw, query=q, author=author, isbn=isbn, limit=limit)
+                # audible.search_raw is now async
+                raw = await audible.search_raw(query=q, author=author, isbn=isbn, limit=limit)
                 if raw:
                     sub = [compiler.compile_audible_metadata(p['asin'], p) for p in raw]
                     return await asyncio.gather(*sub)
@@ -401,7 +409,8 @@ async def get_book_details(asin: str, request: Request, background_tasks: Backgr
         return data
 
     try:
-        raw = await asyncio.to_thread(audible.get_product_raw, asin)
+        # audible.get_product_raw is now async
+        raw = await audible.get_product_raw(asin)
         data = await compiler.compile_audible_metadata(asin, raw)
         return await finalize(data, "Audible")
     except: pass
@@ -474,7 +483,7 @@ async def execute_list_import(url: str, device_id: str, country: str, req_id: st
 
             try:
                 async def _get_data():
-                    raw = await asyncio.to_thread(audible.get_product_raw, asin)
+                    raw = await audible.get_product_raw(asin)
                     return await compiler.compile_audible_metadata(asin, raw)
 
                 meta = await benchmark_call(req_id, "Audible", _get_data)
@@ -591,51 +600,80 @@ async def get_list_items(
         raise HTTPException(status_code=404, detail="List not found")
         
     all_asins = list_obj.get("asins", [])
-    total_count = len(all_asins)
+    raw_items = list_obj.get("items", [])
+    
+    # Determine total count: use ASINs if available, otherwise raw items (e.g. NYT)
+    use_raw_items = not all_asins and raw_items
+    total_count = len(raw_items) if use_raw_items else len(all_asins)
     total_pages = (total_count + limit - 1) // limit if limit > 0 else 1
     
     # 2. Pagination
     start = (page - 1) * limit
     end = start + limit
-    page_asins = all_asins[start:end]
     
     # 3. Fetch Metadata
     items = []
-    req_id = str(uuid.uuid4()) # For internal logging if needed
     
-    async def fetch_item(asin):
-        # Try Cache/DB first
-        cache_key = f"book_v7:{asin}"
-        if cached := await get_cache(cache_key): return cached
-        if stored := await get_book_from_db(asin): 
-             await set_cache(cache_key, stored)
-             return stored
-             
-        # If not found, try to fetch live (optional, might be slow for lists)
-        # For now, we'll just return basic info if missing
-        return {"asin": asin, "title": "Unknown Title", "authors": []}
-
-    # Fetch in parallel
-    tasks = [fetch_item(asin) for asin in page_asins]
-    results = await asyncio.gather(*tasks)
-    
-    # 4. Map to Model
-    for data in results:
-        base_info = {
-            "asin": data.get("asin", "Unknown"),
-            "title": data.get("title", "Unknown"),
-            "authors": data.get("authors", [])
-        }
+    if use_raw_items:
+        # Raw items path (e.g. NYT imports that have no ASINs)
+        page_items = raw_items[start:end]
+        for data in page_items:
+            # Map raw item fields: NYT items use "author" (string) instead of "authors" (list)
+            authors_raw = data.get("authors", [])
+            if not authors_raw:
+                author_str = data.get("author") or data.get("authors_str") or ""
+                authors_raw = [author_str] if author_str else []
+            
+            base_info = {
+                "asin": data.get("asin") or data.get("isbn13") or data.get("primary_isbn13") or "Unknown",
+                "title": data.get("title", "Unknown"),
+                "authors": authors_raw
+            }
+            
+            if enhanced:
+                items.append(ListItemEnhanced(
+                    **base_info,
+                    genres=data.get("genres", []),
+                    cover_image=data.get("cover_image") or data.get("cover"),
+                    rating=data.get("rating")
+                ))
+            else:
+                items.append(ListItemDefault(**base_info))
+    else:
+        # ASIN-based path (Audible, Goodreads, Custom lists)
+        page_asins = all_asins[start:end]
         
-        if enhanced:
-            items.append(ListItemEnhanced(
-                **base_info,
-                genres=data.get("genres", []),
-                cover_image=data.get("cover_image"),
-                rating=data.get("rating")
-            ))
-        else:
-            items.append(ListItemDefault(**base_info))
+        async def fetch_item(asin):
+            # Try Cache/DB first
+            cache_key = f"book_v7:{asin}"
+            if cached := await get_cache(cache_key): return cached
+            if stored := await get_book_from_db(asin): 
+                 await set_cache(cache_key, stored)
+                 return stored
+                 
+            # If not found, return basic info
+            return {"asin": asin, "title": "Unknown Title", "authors": []}
+
+        # Fetch in parallel
+        tasks = [fetch_item(asin) for asin in page_asins]
+        results = await asyncio.gather(*tasks)
+        
+        for data in results:
+            base_info = {
+                "asin": data.get("asin", "Unknown"),
+                "title": data.get("title", "Unknown"),
+                "authors": data.get("authors", [])
+            }
+            
+            if enhanced:
+                items.append(ListItemEnhanced(
+                    **base_info,
+                    genres=data.get("genres", []),
+                    cover_image=data.get("cover_image"),
+                    rating=data.get("rating")
+                ))
+            else:
+                items.append(ListItemDefault(**base_info))
             
     return ListItemsResponse(
         items=items,
@@ -665,7 +703,7 @@ async def create_manual_list(data: CreateListRequest, request: Request):
         
         try:
             async def _get_data():
-                raw = await asyncio.to_thread(audible.get_product_raw, asin)
+                raw = await audible.get_product_raw(asin)
                 return await compiler.compile_audible_metadata(asin, raw)
             
             meta = await benchmark_call(req_id, "Audible", _get_data)
@@ -693,3 +731,109 @@ async def create_manual_list(data: CreateListRequest, request: Request):
 async def add_custom_fields(data: CustomFieldsRequest):
     await save_custom_fields(data.asin, data.fields)
     return {"status": "success", "asin": data.asin}
+# --- 6. CURATION ENDPOINTS ---
+
+@router.get("/curation/lists")
+async def list_curated_lists():
+    """
+    Returns all custom/curated lists.
+    """
+    all_lists = await get_all_lists()
+    # Filter for custom lists
+    return [
+        {
+            "id": str(l.get("_id")),
+            "name": l.get("name"),
+            "count": l.get("count", 0),
+            "created_at": l.get("created_at").isoformat() if l.get("created_at") else None
+        }
+        for l in all_lists if l.get("type") == "custom"
+    ]
+
+@router.delete("/curation/lists/{list_id}")
+async def delete_curated_list(list_id: str):
+    success = await delete_list_by_id(list_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="List not found")
+    return {"status": "success"}
+
+@router.post("/curation/lists/{list_id}/items")
+async def add_item_to_curated_list(list_id: str, data: AddListItemRequest):
+    success = await add_item_to_list(list_id, data.asin)
+    if not success:
+        raise HTTPException(status_code=400, detail="Failed to add item")
+    return {"status": "success"}
+
+@router.delete("/curation/lists/{list_id}/items/{asin}")
+async def remove_item_from_curated_list(list_id: str, asin: str):
+    success = await remove_item_from_list(list_id, asin)
+    if not success:
+        raise HTTPException(status_code=400, detail="Failed to remove item")
+    return {"status": "success"}
+
+@router.get("/curation/lists/{list_id}/items")
+async def get_curated_list_items(
+    list_id: str,
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=100),
+    enhanced: bool = Query(True)
+):
+    """
+    Return items from a curated (custom) list with book metadata.
+    """
+    list_obj = await get_list_by_id(list_id)
+    if not list_obj:
+        raise HTTPException(status_code=404, detail="List not found")
+
+    all_asins = list_obj.get("asins", [])
+    total_count = len(all_asins)
+    total_pages = (total_count + limit - 1) // limit if limit > 0 else 1
+
+    start = (page - 1) * limit
+    page_asins = all_asins[start:start + limit]
+
+    async def fetch_item(asin):
+        cache_key = f"book_v7:{asin}"
+        if cached := await get_cache(cache_key):
+            return cached
+        if stored := await get_book_from_db(asin):
+            await set_cache(cache_key, stored)
+            return stored
+        return {"asin": asin, "title": "Unknown Title", "authors": []}
+
+    results = await asyncio.gather(*[fetch_item(a) for a in page_asins])
+
+    items = []
+    for data in results:
+        base = {
+            "asin": data.get("asin", "Unknown"),
+            "title": data.get("title", "Unknown"),
+            "authors": data.get("authors", [])
+        }
+        if enhanced:
+            items.append(ListItemEnhanced(
+                **base,
+                genres=data.get("genres", []),
+                cover_image=data.get("cover_image"),
+                rating=data.get("rating")
+            ))
+        else:
+            items.append(ListItemDefault(**base))
+
+    return ListItemsResponse(
+        items=items,
+        total_count=total_count,
+        page=page,
+        total_pages=total_pages
+    )
+
+@router.patch("/curation/lists/{list_id}")
+async def rename_curated_list(list_id: str, data: dict):
+    """Rename a curated list."""
+    new_name = data.get("name", "").strip()
+    if not new_name:
+        raise HTTPException(status_code=400, detail="Name is required")
+    success = await update_list_name(list_id, new_name)
+    if not success:
+        raise HTTPException(status_code=404, detail="List not found")
+    return {"status": "success"}

@@ -2,7 +2,7 @@
 
 A high-performance, self-hosted **metadata aggregator API** and **dashboard** for audiobook collectors and developers.
 
-This server sits between your mobile app/media server and external data sources. It aggregates, normalizes, and caches metadata from **Audible, iTunes, Goodreads, Google Books, Penguin Random House, and Hardcover** into a single, unified JSON format.
+This server sits between your mobile app/media server and external data sources. It aggregates, normalizes, and caches metadata from **Audible, iTunes, Goodreads, Google Books, Penguin Random House, Hardcover, and The New York Times** into a single, unified JSON format.
 
 ![Library View](screenshots/Library.png)
 
@@ -20,6 +20,12 @@ This server sits between your mobile app/media server and external data sources.
     *   **Settings:** Toggle providers and configure search limits on the fly.
     *   **Logs:** Live system logs viewer.
 *   **Authentication:** Secure JWT-based authentication for API and Dashboard access.
+*   **Security Suite:**
+    *   **Brute Force Protection:** "Fail2Ban" style blocking for failed logins.
+    *   **Blocklist:** Manual and automated IP/User-Agent blocking.
+    *   **Audit Logs:** Detailed tracking of every login attempt and API request.
+*   **NYT Integration:** Automated weekly import of **New York Times Best Seller** lists.
+*   **System Backups:** Scheduled JSON-based snapshots of your library and settings with one-click restore.
 
 ## Interface
 
@@ -74,6 +80,11 @@ HARDCOVER_API_KEY=your_key_here
 SECRET_KEY=super_secret_string_change_me
 ADMIN_USERNAME=admin
 # ADMIN_PASSWORD_HASH=... (Optional: Generated automatically on startup if missing)
+
+# New Features
+NYT_API_KEY=
+STATIC_API_KEY=
+ENABLE_PASSWORD_RESET_FILE=false
 ```
 
 ### 4. Run with Docker
@@ -154,12 +165,13 @@ graph TD
     end
     
     subgraph "External Providers"
-        Proxy -->|Sync| Audible["Audible API"]
-        Proxy -->|Async| iTunes["iTunes API"]
+        Proxy -->|Sync| Audible["Audible"]
+        Proxy -->|Async| iTunes["iTunes"]
         Proxy -->|Async| Goodreads["Goodreads Scraper"]
-        Proxy -->|Async| PRH["Penguin Random House API"]
-        Proxy -->|Async| GoogleBooks["Google Books API"]
-        Proxy -->|Async| Hardcover["Hardcover API"] 
+        Proxy -->|Async| PRH["Penguin Random House"]
+        Proxy -->|Async| GoogleBooks["Google Books"]
+        Proxy -->|Async| Hardcover["Hardcover"]
+        Proxy -->|Async| NYT["NYT Books"] 
     end
     
     Audible -->|Chapters| Audnexus["Audnexus Engine"]
@@ -175,6 +187,7 @@ graph TD
 | **PRH** | 🟢 Active | Official Descriptions, ISBNs | Requires API Key |
 | **Google Books** | 🟢 Active | Official Descriptions, ISBNs | Requires API Key |
 | **Hardcover** | 🟢 Active | User Ratings, Genres, Series | Requires API Key |
+| **NYT Books** | 🟢 Active | Best Seller Lists, Rankings | Requires API Key |
 
 ## Contributing
 

@@ -13,3 +13,5 @@ router.include_router(library_router)
 router.include_router(settings_router)
 from .nyt import router as nyt_router
 router.include_router(nyt_router)
+from .curation import router as curation_router
+router.include_router(curation_router)

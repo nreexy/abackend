@@ -7,19 +7,20 @@ import httpx
 from bs4 import BeautifulSoup
 import re
 
+import asyncio
+from app.database import archive_audible_response
+
 def get_client():
     if not os.path.exists(AUDIBLE_AUTH_FILE):
         raise HTTPException(status_code=500, detail="Missing audible_auth.json")
     auth = audible.Authenticator.from_file(AUDIBLE_AUTH_FILE)
     return audible.Client(auth)
 
-def search_raw(query: str = None, author: str = None, isbn: str = None, limit: int = 5):
+async def search_raw(query: str = None, author: str = None, isbn: str = None, limit: int = 5):
     """
-    Supports General, Author, and ISBN search.
+    Supports General, Author, and ISBN search. Async wrapper.
     """
     try:
-        client = get_client()
-        
         # Build params dynamically based on what is provided
         params = {
             "num_results": limit,
@@ -27,19 +28,23 @@ def search_raw(query: str = None, author: str = None, isbn: str = None, limit: i
             "response_groups": RESPONSE_GROUPS
         }
 
-        if isbn:
-            # Audible allows searching by ISBN specifically
-            params["isbn"] = isbn
-        elif author:
-            # Specific author search
-            params["search_author"] = author
-        elif query:
-            # General title/keyword search
-            params["title"] = query
-        else:
-            return []
+        if isbn: params["isbn"] = isbn
+        elif author: params["search_author"] = author
+        elif query: params["title"] = query
+        else: return []
 
-        results = client.get("catalog/products", params=params)
+        def _sync_call():
+            client = get_client()
+            return client.get("catalog/products", params=params)
+
+        results = await asyncio.to_thread(_sync_call)
+        
+        # Archive
+        asyncio.create_task(archive_audible_response(
+            endpoint="catalog/products",
+            params=params, 
+            response_data=results
+        ))
         
         if results and results.get('products'):
             return results['products']
@@ -48,10 +53,28 @@ def search_raw(query: str = None, author: str = None, isbn: str = None, limit: i
         print(f"❌ Audible Search Error: {e}")
     return []
 
-def get_product_raw(asin: str):
-    client = get_client()
-    resp = client.get(f"catalog/products/{asin}", params={"response_groups": RESPONSE_GROUPS})
-    return resp['product']
+async def get_product_raw(asin: str):
+    """
+    Async wrapper for fetching product details.
+    """
+    def _sync_call():
+        client = get_client()
+        return client.get(f"catalog/products/{asin}", params={"response_groups": RESPONSE_GROUPS})
+    
+    try:
+        resp = await asyncio.to_thread(_sync_call)
+        
+        # Archive
+        asyncio.create_task(archive_audible_response(
+            endpoint=f"catalog/products/{asin}",
+            params={"asin": asin}, 
+            response_data=resp
+        ))
+        
+        return resp['product']
+    except Exception as e:
+        print(f"❌ Audible Details Error: {e}")
+        raise e
 
 
 async def scrape_list_from_url(url: str):

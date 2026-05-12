@@ -29,3 +29,6 @@ backup_jobs_collection = db.backup_jobs
 backup_jobs_collection = db.backup_jobs
 backup_history_collection = db.backup_history
 nyt_subscriptions_collection = db.nyt_subscriptions
+nyt_archive_collection = db.nyt_archive
+nyt_book_archive_collection = db.nyt_book_archive
+audible_archive_collection = db.audible_archive

@@ -14,13 +14,21 @@ from .core import (
     logs_collection,
     backup_jobs_collection,
     backup_history_collection,
-    nyt_subscriptions_collection
+    nyt_subscriptions_collection,
+    nyt_archive_collection,
+    nyt_book_archive_collection,
+    audible_archive_collection
 )
 from .nyt import (
     upsert_nyt_subscription,
     get_all_nyt_subscriptions,
     update_nyt_subscription_last_run,
-    delete_nyt_subscription
+    delete_nyt_subscription,
+    archive_nyt_response
+)
+
+from .audible import (
+    archive_audible_response
 )
 
 from .books import (
@@ -82,7 +90,10 @@ from .lists import (
     create_custom_list, 
     get_all_lists, 
     get_list_by_id, 
-    delete_list_by_id
+    delete_list_by_id,
+    update_list_name,
+    add_item_to_list,
+    remove_item_from_list
 )
 
 from .admin import (

@@ -1,0 +1,409 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+
+  {% if active_list %}
+  <!-- ============================
+       LIST DETAIL VIEW
+       ============================ -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex align-items-center gap-3">
+      <a href="/curation" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i>
+      </a>
+      <h2 class="mb-0" id="listTitle">{{ active_list.name }}</h2>
+      <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#renameModal"
+        title="Rename list">
+        <i class="bi bi-pencil"></i>
+      </button>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addBookModal">
+        <i class="bi bi-plus-lg"></i> Add Books
+      </button>
+      <form action="/curation/{{ active_list._id }}/delete" method="post"
+        onsubmit="return confirm('Delete this list?');">
+        <button type="submit" class="btn btn-outline-danger"><i class="bi bi-trash"></i> Delete List</button>
+      </form>
+    </div>
+  </div>
+
+  <p class="text-muted small mb-3">
+    <i class="bi bi-book"></i> {{ active_list.count }} books &nbsp;·&nbsp;
+    <i class="bi bi-calendar3"></i> Created {{ active_list.created_at.strftime('%Y-%m-%d') }}
+  </p>
+
+  <!-- Books Table -->
+  <div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+      {% if books %}
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th style="width:60px;"></th>
+              <th>Title</th>
+              <th>Author</th>
+              <th class="text-center">Rating</th>
+              <th class="text-end pe-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="booksTableBody">
+            {% for book in books %}
+            <tr data-asin="{{ book.asin }}">
+              <td class="ps-3">
+                {% if book.cover_image %}
+                <img src="{{ book.cover_image }}" alt="cover" style="width:45px;height:45px;object-fit:cover;border-radius:4px;">
+                {% else %}
+                <div style="width:45px;height:45px;background:#e9ecef;border-radius:4px;display:flex;align-items:center;justify-content:center;">
+                  <i class="bi bi-book text-muted"></i>
+                </div>
+                {% endif %}
+              </td>
+              <td>
+                <div class="fw-semibold text-truncate" style="max-width:320px;" title="{{ book.title }}">{{ book.title }}</div>
+                <div class="text-muted small">{{ book.asin }}</div>
+              </td>
+              <td class="text-muted small">{{ book.authors_str or '-' }}</td>
+              <td class="text-center">
+                {% if book.rating %}
+                <span class="text-warning fw-bold">★ {{ "%.1f"|format(book.rating) }}</span>
+                {% else %}
+                <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td class="text-end pe-3">
+                <a href="/detail_view?asin={{ book.asin }}" class="btn btn-sm btn-outline-secondary me-1" title="View Details">
+                  <i class="bi bi-eye"></i>
+                </a>
+                <button class="btn btn-sm btn-outline-danger" onclick="removeBook('{{ active_list._id }}', '{{ book.asin }}', this)" title="Remove from list">
+                  <i class="bi bi-x-lg"></i>
+                </button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="text-center py-5 text-muted">
+        <i class="bi bi-journal-plus fs-1 mb-3 d-block"></i>
+        <p class="mb-2">This list is empty.</p>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addBookModal">
+          <i class="bi bi-plus-lg"></i> Add Books
+        </button>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ============================
+       ADD BOOK MODAL
+       ============================ -->
+  <div class="modal fade" id="addBookModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-search me-2"></i>Search & Add Books</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+
+          <!-- Search Form -->
+          <div class="row g-2 mb-3">
+            <div class="col-md-4">
+              <input type="text" class="form-control" id="addQ" placeholder="Title / Keywords">
+            </div>
+            <div class="col-md-3">
+              <input type="text" class="form-control" id="addAuthor" placeholder="Author">
+            </div>
+            <div class="col-md-2">
+              <input type="number" class="form-control" id="addMinRating" step="0.1" min="0" max="5" placeholder="Min ★">
+            </div>
+            <div class="col-md-3 d-grid">
+              <button class="btn btn-primary" onclick="searchBooks()">
+                <i class="bi bi-search"></i> Search
+              </button>
+            </div>
+          </div>
+
+          <!-- Provider Checkboxes -->
+          <div class="border rounded p-2 mb-3 bg-light d-flex flex-wrap gap-3">
+            <div class="form-check">
+              <input class="form-check-input add-prov-chk" type="checkbox" value="Audible" id="addProvAudible"
+                {% if config.providers.audible %}checked{% endif %}>
+              <label class="form-check-label" for="addProvAudible">Audible</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input add-prov-chk" type="checkbox" value="iTunes" id="addProvItunes"
+                {% if config.providers.itunes %}checked{% endif %}>
+              <label class="form-check-label" for="addProvItunes">iTunes</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input add-prov-chk" type="checkbox" value="Goodreads" id="addProvGoodreads"
+                {% if config.providers.goodreads %}checked{% endif %}>
+              <label class="form-check-label" for="addProvGoodreads">Goodreads</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input add-prov-chk" type="checkbox" value="PRH" id="addProvPrh"
+                {% if config.providers.prh %}checked{% endif %}>
+              <label class="form-check-label" for="addProvPrh">PRH</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input add-prov-chk" type="checkbox" value="Google" id="addProvGoogle"
+                {% if config.providers.google %}checked{% endif %}>
+              <label class="form-check-label" for="addProvGoogle">Google</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input add-prov-chk" type="checkbox" value="Hardcover" id="addProvHardcover"
+                {% if config.providers.hardcover %}checked{% endif %}>
+              <label class="form-check-label" for="addProvHardcover">Hardcover</label>
+            </div>
+          </div>
+
+          <!-- Search Status -->
+          <div id="addSearchStatus" class="text-center py-3 d-none">
+            <div class="spinner-border text-primary spinner-border-sm me-2"></div>
+            Searching...
+          </div>
+
+          <!-- Search Results -->
+          <div id="addSearchResults" class="overflow-auto" style="max-height: 380px;">
+            <div class="text-center text-muted py-4">
+              <i class="bi bi-search fs-2 mb-2 d-block"></i>
+              Search above to find books to add.
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Done</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rename Modal -->
+  <div class="modal fade" id="renameModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <form action="/curation/{{ active_list._id }}/rename" method="post">
+          <div class="modal-header">
+            <h5 class="modal-title">Rename List</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <input type="text" class="form-control" name="name" value="{{ active_list.name }}" required>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const LIST_ID = "{{ active_list._id }}";
+
+    async function searchBooks() {
+      const q = document.getElementById('addQ').value.trim();
+      const author = document.getElementById('addAuthor').value.trim();
+      const minRating = document.getElementById('addMinRating').value;
+      const providers = Array.from(document.querySelectorAll('.add-prov-chk:checked'))
+        .map(cb => cb.value).join(',');
+
+      if (!q && !author) {
+        alert("Please enter a title or author.");
+        return;
+      }
+
+      const status = document.getElementById('addSearchStatus');
+      const results = document.getElementById('addSearchResults');
+      status.classList.remove('d-none');
+      results.innerHTML = '';
+
+      const params = new URLSearchParams();
+      if (q) params.append('q', q);
+      if (author) params.append('author', author);
+      if (minRating) params.append('min_rating', minRating);
+      if (providers) params.append('providers', providers);
+
+      try {
+        const res = await fetch(`/search?${params}`);
+        const data = await res.json();
+        status.classList.add('d-none');
+
+        if (!res.ok || data.length === 0) {
+          results.innerHTML = '<div class="text-center text-muted py-3">No results found.</div>';
+          return;
+        }
+
+        renderAddResults(data);
+      } catch (e) {
+        status.classList.add('d-none');
+        results.innerHTML = `<div class="alert alert-danger">Error: ${e.message}</div>`;
+      }
+    }
+
+    function renderAddResults(books) {
+      const container = document.getElementById('addSearchResults');
+      container.innerHTML = '';
+
+      books.forEach(book => {
+        const cover = book.cover || '';
+        const authors = book.authors ? book.authors.join(', ') : (book.author || 'Unknown');
+        const rating = book.rating ? `★ ${book.rating.toFixed(1)}` : '';
+
+        const row = document.createElement('div');
+        row.className = 'd-flex align-items-center gap-3 p-2 border-bottom hover-bg';
+        row.innerHTML = `
+          ${cover
+            ? `<img src="${cover}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;flex-shrink:0;" alt="cover">`
+            : `<div style="width:40px;height:40px;background:#e9ecef;border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;"><i class="bi bi-book text-muted"></i></div>`
+          }
+          <div class="flex-grow-1 overflow-hidden">
+            <div class="fw-semibold text-truncate">${book.title}</div>
+            <div class="text-muted small text-truncate">${authors} ${rating ? '· ' + rating : ''}</div>
+          </div>
+          <button class="btn btn-sm btn-outline-primary flex-shrink-0" onclick="addBook('${book.asin}', this)">
+            <i class="bi bi-plus-lg"></i> Add
+          </button>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    async function addBook(asin, btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+      try {
+        const res = await fetch(`/curation/lists/${LIST_ID}/items`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ asin })
+        });
+
+        if (res.ok) {
+          btn.innerHTML = '<i class="bi bi-check-lg"></i>';
+          btn.className = 'btn btn-sm btn-success flex-shrink-0';
+          // Reload the table row data after a short delay
+          setTimeout(() => location.reload(), 800);
+        } else {
+          btn.innerHTML = '<i class="bi bi-x-lg"></i>';
+          btn.className = 'btn btn-sm btn-danger flex-shrink-0';
+          btn.disabled = false;
+        }
+      } catch (e) {
+        btn.innerHTML = 'Error';
+        btn.disabled = false;
+      }
+    }
+
+    async function removeBook(listId, asin, btn) {
+      if (!confirm('Remove this book from the list?')) return;
+
+      btn.disabled = true;
+      try {
+        const res = await fetch(`/curation/lists/${listId}/items/${asin}`, { method: 'DELETE' });
+        if (res.ok) {
+          const row = btn.closest('tr');
+          row.style.transition = 'opacity 0.3s';
+          row.style.opacity = '0';
+          setTimeout(() => row.remove(), 300);
+        }
+      } catch (e) {
+        btn.disabled = false;
+      }
+    }
+
+    // Allow pressing Enter in search fields
+    ['addQ', 'addAuthor', 'addMinRating'].forEach(id => {
+      document.getElementById(id).addEventListener('keydown', e => {
+        if (e.key === 'Enter') searchBooks();
+      });
+    });
+  </script>
+
+  {% else %}
+  <!-- ============================
+       LISTS OVERVIEW
+       ============================ -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Curation</h2>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createListModal">
+      <i class="bi bi-plus-lg"></i> New List
+    </button>
+  </div>
+
+  <div class="row">
+    {% for lst in lists %}
+    <div class="col-md-4 mb-4">
+      <div class="card h-100 shadow-sm border-0">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <h5 class="card-title text-truncate mb-0" style="max-width:80%;" title="{{ lst.name }}">{{ lst.name }}</h5>
+            <span class="badge bg-secondary"><i class="bi bi-stars me-1"></i>Curated</span>
+          </div>
+          <p class="text-muted small mt-2 mb-3">
+            <i class="bi bi-book me-1"></i>{{ lst.count }} books
+          </p>
+          <div class="d-flex justify-content-between align-items-center">
+            <span class="text-muted small">{{ lst.created_at.strftime('%Y-%m-%d') }}</span>
+            <a href="/curation/{{ lst._id }}" class="btn btn-sm btn-outline-primary">Open</a>
+          </div>
+        </div>
+        <div class="card-footer bg-transparent border-top-0 d-flex justify-content-end">
+          <form action="/curation/{{ lst._id }}/delete" method="post"
+            onsubmit="return confirm('Delete &quot;{{ lst.name }}&quot;?');">
+            <button type="submit" class="btn btn-sm btn-outline-danger border-0">
+              <i class="bi bi-trash"></i>
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="col-12 text-center py-5 text-muted">
+      <i class="bi bi-stars fs-1 mb-3 d-block"></i>
+      <p class="mb-3">No curated lists yet. Create one to get started.</p>
+      <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createListModal">
+        <i class="bi bi-plus-lg"></i> New List
+      </button>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Create List Modal -->
+  <div class="modal fade" id="createListModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <form action="/curation/create" method="post">
+          <div class="modal-header">
+            <h5 class="modal-title"><i class="bi bi-stars me-2"></i>New Curated List</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <label class="form-label fw-semibold">List Name</label>
+            <input type="text" class="form-control" name="name" placeholder="e.g. Summer Reads 2026" required autofocus>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary">Create</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  {% endif %}
+</div>
+
+<style>
+  .hover-bg:hover {
+    background-color: #f8f9fa;
+  }
+</style>
+{% endblock %}

@@ -2,7 +2,8 @@ import httpx
 import logging
 from typing import List, Dict, Optional
 import urllib.parse
-from app.database import get_system_settings
+from app.database import get_system_settings, archive_nyt_response
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -19,20 +20,29 @@ class NYTClient:
         return self.api_key
 
     async def get_list_names(self) -> List[Dict]:
-        """Fetches all available NYT Book Lists."""
+        """Fetches all available NYT Book Lists using overview.json."""
         api_key = await self._get_api_key()
         if not api_key:
             logger.warning("NYT API Key not configured.")
             return []
 
         # User reported names.json fails, using overview.json
-        url = f"{NYT_BASE_URL}/lists/overview.json?api-key={api_key}"
+        endpoint = "/lists/overview.json"
+        url = f"{NYT_BASE_URL}{endpoint}?api-key={api_key}"
         
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.get(url, timeout=10.0)
                 response.raise_for_status()
                 data = response.json()
+                
+                # Archive in background
+                asyncio.create_task(archive_nyt_response(
+                    endpoint="lists/overview",
+                    params={"api_key_masked": "true"},
+                    response_data=data
+                ))
+                
                 # overview.json structure: { results: { lists: [] } }
                 return data.get("results", {}).get("lists", [])
             except Exception as e:
@@ -48,17 +58,23 @@ class NYTClient:
         if not api_key:
             return []
 
-        # Assuming list_name_encoded is already URL-safe, but let's be safe
         # The endpoint is /lists/current/{list_name}.json
-        # list_name should be hyphenated e.g. "hardcover-fiction"
-        
-        url = f"{NYT_BASE_URL}/lists/current/{list_name_encoded}.json?api-key={api_key}"
+        endpoint = f"/lists/current/{list_name_encoded}.json"
+        url = f"{NYT_BASE_URL}{endpoint}?api-key={api_key}"
         
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.get(url, timeout=10.0)
                 response.raise_for_status()
                 data = response.json()
+                
+                # Archive in background
+                asyncio.create_task(archive_nyt_response(
+                    endpoint=f"lists/current/{list_name_encoded}",
+                    params={"list_name": list_name_encoded},
+                    response_data=data
+                ))
+                
                 results = data.get("results", {})
                 books = results.get("books", [])
                 return books

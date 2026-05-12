@@ -39,3 +39,51 @@ async def delete_list_by_id(list_id: str):
         await lists_collection.delete_one({"_id": ObjectId(list_id)})
         return True
     except: return False
+
+async def update_list_name(list_id: str, new_name: str):
+    try:
+        await lists_collection.update_one(
+            {"_id": ObjectId(list_id)},
+            {"$set": {"name": new_name, "updated_at": datetime.datetime.utcnow()}}
+        )
+        return True
+    except: return False
+
+async def add_item_to_list(list_id: str, asin: str):
+    try:
+        await lists_collection.update_one(
+            {"_id": ObjectId(list_id)},
+            {
+                "$addToSet": {"asins": asin},
+                "$inc": {"count": 1},
+                "$set": {"updated_at": datetime.datetime.utcnow()}
+            }
+        )
+        # Recalculate count to be safe
+        doc = await lists_collection.find_one({"_id": ObjectId(list_id)})
+        if doc:
+            await lists_collection.update_one(
+                {"_id": ObjectId(list_id)},
+                {"$set": {"count": len(doc.get("asins", []))}}
+            )
+        return True
+    except: return False
+
+async def remove_item_from_list(list_id: str, asin: str):
+    try:
+        await lists_collection.update_one(
+            {"_id": ObjectId(list_id)},
+            {
+                "$pull": {"asins": asin},
+                "$set": {"updated_at": datetime.datetime.utcnow()}
+            }
+        )
+        # Recalculate count
+        doc = await lists_collection.find_one({"_id": ObjectId(list_id)})
+        if doc:
+            await lists_collection.update_one(
+                {"_id": ObjectId(list_id)},
+                {"$set": {"count": len(doc.get("asins", []))}}
+            )
+        return True
+    except: return False
