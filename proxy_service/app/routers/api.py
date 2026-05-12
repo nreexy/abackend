@@ -69,6 +69,23 @@ class ListItemEnhanced(ListItemDefault):
     cover_image: Optional[str] = None
     rating: Optional[float] = None
 
+class CuratedListItem(BaseModel):
+    asin: str
+    title: str
+    subtitle: Optional[str] = None
+    authors: List[str] = []
+    narrators: List[str] = []
+    genres: List[str] = []
+    cover_image: Optional[str] = None
+    rating: Optional[float] = None
+    rating_count: Optional[int] = None
+    runtime_minutes: Optional[int] = None
+    published_date: Optional[str] = None
+    description: Optional[str] = None
+    language: Optional[str] = None
+    sample_url: Optional[str] = None
+    series_str: Optional[str] = None
+
 class ListItemsResponse(BaseModel):
     items: List[Union[ListItemEnhanced, ListItemDefault]]
     total_count: int
@@ -776,10 +793,9 @@ async def get_curated_list_items(
     list_id: str,
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
-    enhanced: bool = Query(True)
 ):
     """
-    Return items from a curated (custom) list with book metadata.
+    Return items from a curated (custom) list with full book metadata.
     """
     list_obj = await get_list_by_id(list_id)
     if not list_obj:
@@ -805,27 +821,28 @@ async def get_curated_list_items(
 
     items = []
     for data in results:
-        base = {
-            "asin": data.get("asin", "Unknown"),
-            "title": data.get("title", "Unknown"),
-            "authors": data.get("authors", [])
-        }
-        if enhanced:
-            items.append(ListItemEnhanced(
-                **base,
-                genres=data.get("genres", []),
-                cover_image=data.get("cover_image"),
-                rating=data.get("rating")
-            ))
-        else:
-            items.append(ListItemDefault(**base))
+        series = data.get("series", [])
+        series_str = f"{series[0].get('name')} #{series[0].get('sequence')}" if series else None
 
-    return ListItemsResponse(
-        items=items,
-        total_count=total_count,
-        page=page,
-        total_pages=total_pages
-    )
+        items.append(CuratedListItem(
+            asin=data.get("asin", "Unknown"),
+            title=data.get("title", "Unknown"),
+            subtitle=data.get("subtitle"),
+            authors=data.get("authors", []),
+            narrators=data.get("narrators", []),
+            genres=data.get("genres", []),
+            cover_image=data.get("cover_image"),
+            rating=data.get("rating"),
+            rating_count=data.get("rating_count"),
+            runtime_minutes=data.get("runtime_minutes"),
+            published_date=data.get("published_date"),
+            description=data.get("description"),
+            language=data.get("language"),
+            sample_url=data.get("sample_url"),
+            series_str=series_str,
+        ))
+
+    return {"items": items, "total_count": total_count, "page": page, "total_pages": total_pages}
 
 @router.patch("/curation/lists/{list_id}")
 async def rename_curated_list(list_id: str, data: dict):
