@@ -1,13 +1,15 @@
 from fastapi import APIRouter, Request, Response
-from starlette.responses import RedirectResponse
+from starlette.responses import RedirectResponse, StreamingResponse
 import json
+import datetime
 
 from app.database import (
-    get_dashboard_stats, 
-    get_detailed_stats, 
+    get_dashboard_stats,
+    get_detailed_stats,
     get_traffic_stats,
     get_collection_names,
-    execute_admin_query
+    execute_admin_query,
+    export_collection_to_csv
 )
 from .utils import templates, check_ui_auth
 
@@ -86,6 +88,25 @@ async def query_database_action(request: Request):
             
         result = await execute_admin_query(collection, query_dict)
         return result
-        
+
     except Exception as e:
         return Response(status_code=500, content=str(e))
+
+@router.get("/database/export/{collection_name}")
+async def export_collection_action(request: Request, collection_name: str):
+    if not await check_ui_auth(request):
+        return RedirectResponse("/login")
+
+    collections = await get_collection_names()
+    if collection_name not in collections:
+        return Response(status_code=404, content="Collection not found")
+
+    csv_buffer = await export_collection_to_csv(collection_name)
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{collection_name}_{timestamp}.csv"
+
+    return StreamingResponse(
+        iter([csv_buffer.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )

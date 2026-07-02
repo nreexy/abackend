@@ -10,10 +10,16 @@
             <h6 class="text-uppercase text-muted fw-bold small">Collections</h6>
             <div class="list-group list-group-flush mt-3">
                 {% for col in collections %}
-                <button type="button" class="list-group-item list-group-item-action py-2 collection-btn"
-                    data-collection="{{ col }}" onclick="selectCollection('{{ col }}')">
-                    <i class="bi bi-table me-2 text-secondary"></i> {{ col }}
-                </button>
+                <div class="list-group-item list-group-item-action py-2 d-flex align-items-center justify-content-between collection-btn"
+                    data-collection="{{ col }}">
+                    <span class="flex-grow-1" style="cursor: pointer; min-width: 0;" onclick="selectCollection('{{ col }}')">
+                        <i class="bi bi-table me-2 text-secondary"></i>{{ col }}
+                    </span>
+                    <a href="/database/export/{{ col }}" title="Download {{ col }} as CSV"
+                        class="text-secondary ms-2 flex-shrink-0" onclick="event.stopPropagation();">
+                        <i class="bi bi-download"></i>
+                    </a>
+                </div>
                 {% endfor %}
             </div>
         </div>
@@ -63,7 +69,7 @@
     function selectCollection(name) {
         activeCollection = name;
         document.querySelectorAll('.collection-btn').forEach(b => b.classList.remove('active'));
-        document.querySelector(`button[data-collection="${name}"]`).classList.add('active');
+        document.querySelector(`.collection-btn[data-collection="${name}"]`).classList.add('active');
 
         document.getElementById('activeCollectionBadge').innerText = name;
         document.getElementById('runBtn').disabled = false;
